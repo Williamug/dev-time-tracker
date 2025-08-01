@@ -28,6 +28,15 @@ export class MetricsService {
     this.startSyncInterval();
   }
 
+  private getDefaultCodeMetrics() {
+    return {
+      lines: { added: 0, removed: 0, total: 0 },
+      files: { modified: 0, created: 0, deleted: 0 },
+      fileTypes: {},
+      complexity: { max: 0, average: 0 }
+    };
+  }
+
   private loadConfig() {
     const config = vscode.workspace.getConfiguration('devtimetracker');
     this.apiUrl = config.get<string>('apiUrl') || null;
@@ -115,25 +124,39 @@ export class MetricsService {
     const changes = e.contentChanges;
     const metrics = this.metricsCollector.getMetrics();
     
-    if (!metrics.code) return;
+    // Initialize code metrics if not present
+    if (!metrics.code) {
+      this.metricsCollector.updateMetrics({
+        code: this.getDefaultCodeMetrics()
+      });
+      return;
+    }
+    
+    // Create a copy of metrics to work with
+    const updatedMetrics = { ...metrics.code };
 
     // Update line metrics
     changes.forEach(change => {
       const addedLines = change.text.split('\n').length - 1;
       const removedLines = change.range.end.line - change.range.start.line + 1;
       
-      metrics.code.lines.added += Math.max(0, addedLines - 1);
-      metrics.code.lines.removed += removedLines;
-      metrics.code.lines.total = metrics.code.lines.added - metrics.code.lines.removed;
+      updatedMetrics.lines.added += Math.max(0, addedLines - 1);
+      updatedMetrics.lines.removed += removedLines;
+      updatedMetrics.lines.total = updatedMetrics.lines.added - updatedMetrics.lines.removed;
     });
 
     // Update file type metrics
     const fileExtension = e.document.fileName.split('.').pop() || '';
     if (fileExtension) {
-      metrics.code.fileTypes[fileExtension] = (metrics.code.fileTypes[fileExtension] || 0) + 1;
+      updatedMetrics.fileTypes[fileExtension] = (updatedMetrics.fileTypes[fileExtension] || 0) + 1;
     }
 
-    this.metricsCollector.updateMetrics(metrics);
+    // Update modified files count
+    updatedMetrics.files.modified += 1;
+
+    this.metricsCollector.updateMetrics({
+      code: updatedMetrics
+    });
   }
 
   private handleEditorChange(editor: vscode.TextEditor) {
@@ -184,6 +207,31 @@ export class MetricsService {
   // Public API
   public getMetrics(): Partial<MetricsPayload> {
     return this.metricsCollector.getMetrics();
+  }
+
+  public handleActivity() {
+    const metrics = this.metricsCollector.getMetrics();
+    if (!metrics.productivity) return;
+    
+    // Update focus time (in seconds)
+    const now = new Date();
+    const lastUpdate = metrics.timestamp || now;
+    const secondsActive = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000);
+    
+    // Update productive hours (current hour)
+    const currentHour = now.getHours().toString().padStart(2, '0');
+    
+    this.metricsCollector.updateMetrics({
+      timestamp: now,
+      productivity: {
+        ...metrics.productivity,
+        focusTime: (metrics.productivity.focusTime || 0) + secondsActive,
+        productiveHours: {
+          ...metrics.productivity.productiveHours,
+          [currentHour]: (metrics.productivity.productiveHours?.[currentHour] || 0) + secondsActive
+        }
+      }
+    });
   }
 
   public async forceSync(): Promise<boolean> {
