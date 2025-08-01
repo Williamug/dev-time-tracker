@@ -3,6 +3,9 @@ import { SessionManager } from './sessionManager';
 import { EventBuffer } from './buffer';
 import { EventListener } from './eventListener';
 import { StatusBarManager } from './statusBarManager';
+import { MetricsService } from './services/MetricsService';
+import { GitService } from './services/GitService';
+import { HealthService } from './services/HealthService';
 
 // Track user activity state
 let lastActivityTime = Date.now();
@@ -37,6 +40,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
   
   console.log('[Extension] Configuration loaded:', { hasApiUrl: !!apiUrl, hasApiToken: !!apiToken });
 
+  // Initialize services
+  const metricsService = MetricsService.getInstance();
+  const gitService = GitService.getInstance();
+  const healthService = HealthService.getInstance();
+  
   // Initialize status bar manager
   statusBarManager = StatusBarManager.getInstance(ctx);
   if (!statusBarManager) {
@@ -67,6 +75,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   // Set up event listeners for user activity
   console.log('[Extension] Setting up activity listeners...');
+  
+  // Forward activity events to metrics service
+  const metrics = MetricsService.getInstance();
+  const trackActivity = (type: string) => {
+    console.log(`[Activity] ${type}`);
+    metrics.handleActivity();
+  };
   
   const activityEvents: vscode.Disposable[] = [
     // Editor events
@@ -133,24 +148,38 @@ export async function activate(ctx: vscode.ExtensionContext) {
     updateActivityStatus();
   }, 1000); // Check every second
   
-  ctx.subscriptions.push({ 
-    dispose: () => {
-      if (activityCheckInterval) {
-        clearInterval(activityCheckInterval);
-        activityCheckInterval = null;
-      }
-    } 
-  });
+  ctx.subscriptions.push(new vscode.Disposable(() => {
+    activityEvents.forEach(disposable => disposable.dispose());
+    if (statusBarManager) {
+      statusBarManager.dispose();
+    }
+    // Clean up services
+    MetricsService.getInstance().dispose();
+    GitService.getInstance().dispose();
+    HealthService.getInstance().dispose();
+  }));
 
   // Register commands
   const showStatus = vscode.commands.registerCommand('devtimetracker.showStatus', () => {
     if (!statusBarManager) return;
     const sessionTime = statusBarManager.getSessionTime();
     const todayTime = statusBarManager.getTodayTime();
-    vscode.window.showInformationMessage(
-      `Current Session: ${sessionTime}\n` +
-      `Today's Total: ${todayTime}`
-    );
+    const metrics = MetricsService.getInstance().getMetrics();
+    
+    let message = `Current Session: ${sessionTime}\n` +
+                 `Today's Total: ${todayTime}`;
+    
+    if (metrics.code) {
+      message += `\n\nCode Metrics:`;
+      message += `\n- Lines: +${metrics.code.lines.added}/-${metrics.code.lines.removed}`;
+      message += `\n- Files: ${Object.keys(metrics.code.fileTypes).length} types`;
+    }
+    
+    if (metrics.project?.currentProject) {
+      message += `\n\nCurrent Project: ${metrics.project.currentProject}`;
+    }
+    
+    vscode.window.showInformationMessage(message);
   });
   ctx.subscriptions.push(showStatus);
 
