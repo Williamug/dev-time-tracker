@@ -6,73 +6,161 @@ import { StatusBarManager } from './statusBarManager';
 
 // Track user activity state
 let lastActivityTime = Date.now();
-const INACTIVITY_THRESHOLD = 300000; // 5 minutes in milliseconds
+const INACTIVITY_THRESHOLD = 5000; // 5 seconds for testing (change to 300000 for 5 minutes in production)
+let activityCheckInterval: NodeJS.Timeout | null = null;
+let statusBarManager: StatusBarManager | null = null;
 
 // Update activity status based on user interaction
-function updateActivityStatus(statusBarManager: StatusBarManager) {
+function updateActivityStatus() {
+  if (!statusBarManager) return;
+  
   const now = Date.now();
   const isActive = now - lastActivityTime < INACTIVITY_THRESHOLD;
+  console.log(`[Activity] ${isActive ? 'Active' : 'Idle'} (${new Date(lastActivityTime).toLocaleTimeString()})`);
   statusBarManager.updateActivityStatus(isActive);
 }
 
+// Track user activity
+function trackUserActivity(reason: string) {
+  const oldTime = lastActivityTime;
+  lastActivityTime = Date.now();
+  console.log(`[Activity] Activity detected (${reason}) - Last: ${new Date(oldTime).toLocaleTimeString()}, Now: ${new Date(lastActivityTime).toLocaleTimeString()}`);
+  updateActivityStatus();
+}
+
 export async function activate(ctx: vscode.ExtensionContext) {
+  console.log('[Extension] Activating Dev Time Tracker...');
+  
   const cfg = vscode.workspace.getConfiguration('devtimetracker');
-  const apiUrl = cfg.get<string>('apiUrl')!;
-  const apiToken = cfg.get<string>('apiToken')!;
+  const apiUrl = cfg.get<string>('apiUrl');
+  const apiToken = cfg.get<string>('apiToken');
+  
+  console.log('[Extension] Configuration loaded:', { hasApiUrl: !!apiUrl, hasApiToken: !!apiToken });
 
   // Initialize status bar manager
-  const statusBarManager = StatusBarManager.getInstance();
-  
-  // Start a new coding session
-  const sessionMgr = new SessionManager(apiUrl, apiToken, ctx);
-  const sessionId = await sessionMgr.startSession();
+  statusBarManager = StatusBarManager.getInstance(ctx);
+  if (!statusBarManager) {
+    console.error('[Extension] Failed to initialize StatusBarManager');
+    return;
+  }
 
-  // Buffer + Listener
-  const buffer = new EventBuffer(apiUrl, apiToken, sessionId);
-  buffer.start();
-  ctx.subscriptions.push({ dispose: () => buffer.stop() });
+  try {
+    // Initialize session manager and event buffer only if API URL is provided
+    if (apiUrl) {
+      const sessionManager = new SessionManager(apiUrl, apiToken || '', ctx);
+      const sessionId = await sessionManager.startSession();
+      const eventBuffer = new EventBuffer(apiUrl, apiToken || '', sessionId);
+      eventBuffer.start();
+      ctx.subscriptions.push({ dispose: () => eventBuffer.stop() });
 
-  const listener = new EventListener(ctx, buffer, sessionId);
-  listener.start();
+      const listener = new EventListener(ctx, eventBuffer, sessionId);
+      listener.start();
+      console.log('[Extension] Backend integration initialized');
+    } else {
+      console.log('[Extension] Running in local mode - no backend integration');
+    }
 
-  // Track user activity
-  const updateLastActivity = () => {
-    lastActivityTime = Date.now();
-    updateActivityStatus(statusBarManager);
-  };
+  } catch (error) {
+    console.error('[Extension] Error initializing backend integration:', error);
+    vscode.window.showWarningMessage('Dev Time Tracker: Running in local mode - backend integration disabled');
+  }
 
   // Set up event listeners for user activity
+  console.log('[Extension] Setting up activity listeners...');
+  
   const activityEvents: vscode.Disposable[] = [
-    vscode.window.onDidChangeActiveTextEditor(updateLastActivity),
-    vscode.window.onDidChangeTextEditorSelection(updateLastActivity),
-    vscode.window.onDidChangeTextEditorVisibleRanges(updateLastActivity),
-    vscode.workspace.onDidChangeTextDocument(updateLastActivity)
+    // Editor events
+    vscode.window.onDidChangeActiveTextEditor((e) => {
+      console.log('[Activity] Active editor changed:', e?.document.uri.fsPath);
+      trackUserActivity('editor change');
+    }),
+    
+    vscode.window.onDidChangeTextEditorSelection((e) => {
+      console.log('[Activity] Text selection changed in:', e.textEditor.document.uri.fsPath);
+      trackUserActivity('selection change');
+    }),
+    
+    vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+      console.log('[Activity] Visible ranges changed in:', e.textEditor.document.uri.fsPath);
+      trackUserActivity('visible ranges change');
+    }),
+    
+    vscode.workspace.onDidChangeTextDocument((e) => {
+      console.log('[Activity] Document changed:', e.document.uri.fsPath);
+      trackUserActivity('document change');
+    }),
+    
+    // Window focus events
+    vscode.window.onDidChangeWindowState((e) => {
+      console.log(`[Activity] Window focus changed: ${e.focused ? 'focused' : 'unfocused'}`);
+      if (e.focused) trackUserActivity('window focus');
+    }),
+    
+    // Terminal events
+    vscode.window.onDidChangeActiveTerminal((terminal) => {
+      console.log('[Activity] Active terminal changed:', terminal?.name);
+      trackUserActivity('terminal change');
+    }),
+    
+    // Debug events
+    vscode.debug.onDidStartDebugSession(() => {
+      console.log('[Activity] Debug session started');
+      trackUserActivity('debug session start');
+    }),
+    
+    // File system events
+    vscode.workspace.onDidCreateFiles((e) => {
+      console.log('[Activity] Files created:', e.files.map(f => f.fsPath));
+      trackUserActivity('file created');
+    }),
+    
+    // Status bar click command
+    vscode.commands.registerCommand('devtimetracker.forceActive', () => {
+      console.log('[Activity] Manual activation triggered');
+      trackUserActivity('manual activation');
+    })
   ];
   
   // Add activity event listeners to subscriptions
   activityEvents.forEach(disposable => ctx.subscriptions.push(disposable));
+  console.log('[Extension] Activity listeners registered');
 
-  // Update activity status periodically
-  const activityCheckInterval = setInterval(
-    () => updateActivityStatus(statusBarManager),
-    60000 // Check every minute
-  );
-  ctx.subscriptions.push({ dispose: () => clearInterval(activityCheckInterval) });
+  // Initial activity check
+  trackUserActivity('initial activation');
+  
+  // Update activity status more frequently for better responsiveness
+  activityCheckInterval = setInterval(() => {
+    updateActivityStatus();
+  }, 1000); // Check every second
+  
+  ctx.subscriptions.push({ 
+    dispose: () => {
+      if (activityCheckInterval) {
+        clearInterval(activityCheckInterval);
+        activityCheckInterval = null;
+      }
+    } 
+  });
 
   // Register commands
-  ctx.subscriptions.push(
-    vscode.commands.registerCommand('devtimetracker.showStatus', () => {
-      vscode.window.showInformationMessage(
-        `Active coding time: ${listener.getActiveMinutes()} min`
-      );
-    }),
-    vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-      statusBarManager.togglePomodoro();
-    })
-  );
+  const showStatus = vscode.commands.registerCommand('devtimetracker.showStatus', () => {
+    if (!statusBarManager) return;
+    const sessionTime = statusBarManager.getSessionTime();
+    const todayTime = statusBarManager.getTodayTime();
+    vscode.window.showInformationMessage(
+      `Current Session: ${sessionTime}\n` +
+      `Today's Total: ${todayTime}`
+    );
+  });
+  ctx.subscriptions.push(showStatus);
+
+  const togglePomodoro = vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
+    statusBarManager?.togglePomodoro();
+  });
+  ctx.subscriptions.push(togglePomodoro);
 
   // Initial update of activity status
-  updateActivityStatus(statusBarManager);
+  updateActivityStatus();
 }
 
 export async function deactivate() {
