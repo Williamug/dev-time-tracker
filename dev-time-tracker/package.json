@@ -3,8 +3,12 @@
   "displayName": "Dev Time Tracker",
   "description": "Tracker developers productivity",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/williamug/dev-time-tracker.git"
+  },
   "engines": {
-    "vscode": "^1.102.0"
+    "vscode": "^1.99.0"
   },
   "categories": [
     "Other"
@@ -43,7 +47,7 @@
     "test": "vscode-test"
   },
   "devDependencies": {
-    "@types/vscode": "^1.102.0",
+    "@types/vscode": "^1.99.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^8.22.0",
