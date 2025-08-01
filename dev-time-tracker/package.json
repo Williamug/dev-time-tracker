@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Tracker developers productivity",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
@@ -13,37 +13,70 @@
   "categories": [
     "Other"
   ],
+  "publisher": "williamug",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:devtimetracker.showStatus",
+    "onCommand:devtimetracker.togglePomodoro"
   ],
   "main": "./out/extension.js",
+
   "contributes": {
-  "commands": [
-    {
-      "command": "devtimetracker.showStatus",
-      "title": "Show Active Coding Time"
-    },
-    {
-      "command": "devtimetracker.togglePomodoro",
-      "title": "Toggle Pomodoro Timer"
-    }
-  ],
-  "configuration": {
-    "title": "Dev Time Tracker Settings",
-    "properties": {
-      "devtimetracker.apiUrl": {
-        "type": "string",
-        "default": "https://your-backend.com",
-        "description": "Base URL of your tracking API"
+    "commands": [
+      {
+        "command": "devtimetracker.showStatus",
+        "title": "Show Active Coding Time"
       },
-      "devtimetracker.apiToken": {
-        "type": "string",
-        "default": "",
-        "description": "Your API token"
+      {
+        "command": "devtimetracker.togglePomodoro",
+        "title": "Toggle Pomodoro Timer"
+      }
+    ],
+    "configuration": {
+      "title": "Dev Time Tracker Settings",
+      "properties": {
+        "devtimetracker.apiUrl": {
+          "type": "string",
+          "default": "https://your-backend.com",
+          "description": "Base URL of your tracking API"
+        },
+        "devtimetracker.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Your API token"
+        },
+        "devtimetracker.pomodoro.workDuration": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Duration of work sessions in minutes"
+        },
+        "devtimetracker.pomodoro.shortBreakDuration": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Duration of short breaks in minutes"
+        },
+        "devtimetracker.pomodoro.longBreakDuration": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "description": "Duration of long breaks in minutes"
+        },
+        "devtimetracker.pomodoro.sessionsBeforeLongBreak": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "description": "Number of work sessions before a long break"
+        },
+        "devtimetracker.pomodoro.autoStartNextSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the next session/break when the current one ends"
+        }
       }
     }
-  }
-},
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
