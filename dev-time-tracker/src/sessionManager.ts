@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
 
+interface SessionResponse {
+  session_id: string;
+  [key: string]: unknown;  // Allow for other properties we might not care about
+}
+
 export class SessionManager {
   private static apiUrl: string;
   private static apiToken: string;
@@ -20,7 +25,8 @@ export class SessionManager {
         Authorization: `Bearer ${SessionManager.apiToken}`
       }
     });
-    const { session_id } = await res.json();
+    const data = await res.json() as SessionResponse;
+    const session_id = data.session_id;
     SessionManager.sessionId = session_id;
     SessionManager.ctx.globalState.update('sessionId', session_id);
     return session_id;
