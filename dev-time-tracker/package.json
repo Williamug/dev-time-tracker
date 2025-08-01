@@ -13,13 +13,19 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "main": "./out/extension.js",
   "contributes": {
   "commands": [
     {
       "command": "devtimetracker.showStatus",
       "title": "Show Active Coding Time"
+    },
+    {
+      "command": "devtimetracker.togglePomodoro",
+      "title": "Toggle Pomodoro Timer"
     }
   ],
   "configuration": {
