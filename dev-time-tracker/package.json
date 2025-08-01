@@ -1,8 +1,8 @@
 {
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
-  "description": "Tracker developers productivity",
-  "version": "0.0.1",
+  "description": "Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.",
+  "version": "1.2.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
@@ -13,37 +13,109 @@
   "categories": [
     "Other"
   ],
+  "publisher": "William Asaba",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:devtimetracker.showStatus",
+    "onCommand:devtimetracker.togglePomodoro"
   ],
   "main": "./out/extension.js",
+
   "contributes": {
-  "commands": [
-    {
-      "command": "devtimetracker.showStatus",
-      "title": "Show Active Coding Time"
-    },
-    {
-      "command": "devtimetracker.togglePomodoro",
-      "title": "Toggle Pomodoro Timer"
-    }
-  ],
-  "configuration": {
-    "title": "Dev Time Tracker Settings",
-    "properties": {
-      "devtimetracker.apiUrl": {
-        "type": "string",
-        "default": "https://your-backend.com",
-        "description": "Base URL of your tracking API"
+    "commands": [
+      {
+        "command": "devtimetracker.showStatus",
+        "title": "Show Active Coding Time"
       },
-      "devtimetracker.apiToken": {
-        "type": "string",
-        "default": "",
-        "description": "Your API token"
+      {
+        "command": "devtimetracker.togglePomodoro",
+        "title": "Toggle Pomodoro Timer"
+      },
+      {
+        "command": "devtimetracker.openDashboard",
+        "title": "Open Analytics Dashboard"
+      }
+    ],
+    "configuration": {
+      "title": "Dev Time Tracker Settings",
+      "properties": {
+        "devtimetracker.apiUrl": {
+          "type": "string",
+          "default": "https://your-backend.com",
+          "description": "Base URL of your tracking API"
+        },
+        "devtimetracker.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Your API token"
+        },
+        "devtimetracker.pomodoro.workDuration": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Duration of work sessions in minutes"
+        },
+        "devtimetracker.pomodoro.shortBreakDuration": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Duration of short breaks in minutes"
+        },
+        "devtimetracker.pomodoro.longBreakDuration": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "description": "Duration of long breaks in minutes"
+        },
+        "devtimetracker.pomodoro.sessionsBeforeLongBreak": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "description": "Number of work sessions before a long break"
+        },
+        "devtimetracker.pomodoro.autoStartNextSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the next session/break when the current one ends"
+        },
+        "devtimetracker.metrics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable collection of code metrics and analytics"
+        },
+        "devtimetracker.metrics.syncInterval": {
+          "type": "number",
+          "default": 300,
+          "minimum": 60,
+          "description": "Interval in seconds to sync metrics with the backend"
+        },
+        "devtimetracker.health.breakReminderInterval": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 300,
+          "description": "Interval in seconds between break reminders (0 to disable)"
+        },
+        "devtimetracker.health.postureReminderInterval": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 300,
+          "description": "Interval in seconds between posture check reminders (0 to disable)"
+        },
+        "devtimetracker.health.eyeStrainInterval": {
+          "type": "number",
+          "default": 1200,
+          "minimum": 300,
+          "description": "Interval in seconds between eye strain prevention reminders (0 to disable)"
+        },
+        "devtimetracker.goals.dailyCodingTarget": {
+          "type": "number",
+          "default": 240,
+          "minimum": 15,
+          "description": "Daily coding target in minutes"
+        }
       }
     }
-  }
-},
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
