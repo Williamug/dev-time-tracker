@@ -1,31 +1,25 @@
-# dev-time-tracker README
+# Dev Time Tracker
 
-This is the README for your extension "dev-time-tracker". After writing up a brief description, we recommend including the following sections.
+A VS Code extension that tracks your development time and provides insights into your coding sessions.
 
 ## Features
 
-Describe specific features of your extension including screenshots of your extension in action. Image paths are relative to this README file.
-
-For example if there is an image subfolder under your extension project workspace:
-
-\!\[feature X\]\(images/feature-x.png\)
-
-> Tip: Many popular extensions utilize animations. This is an excellent way to show off your extension! We recommend short, focused animations that are easy to follow.
+- Track your coding sessions automatically
+- View your daily/weekly/monthly coding statistics
+- Get insights into your most productive hours
+- Simple and non-intrusive
 
 ## Requirements
 
-If you have any requirements or dependencies, add a section describing those and how to install and configure them.
+- Visual Studio Code 1.75.0 or higher
+- Node.js 16.x or higher
 
 ## Extension Settings
 
-Include if your extension adds any VS Code settings through the `contributes.configuration` extension point.
-
-For example:
-
 This extension contributes the following settings:
 
-* `myExtension.enable`: Enable/disable this extension.
-* `myExtension.thing`: Set to `blah` to do something.
+* `devTimeTracker.apiUrl`: The URL of your time tracking API server
+* `devTimeTracker.apiToken`: Your API token for authentication
 
 ## Known Issues
 
