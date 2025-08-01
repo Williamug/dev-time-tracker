@@ -38,7 +38,8 @@ A VS Code extension that tracks your development time, provides productivity ins
 ## Extension Settings
 
 ### Time Tracking
-"devTimeTracker.apiUrl": "https://your-api-url.com",
+<!-- "devTimeTracker.apiUrl": "https://your-api-url.com", -->
+Access analytics dashboard at https://dev-time-tracker.vercel.app/
 ```json
 "devTimeTracker.apiToken": "your-api-token",
 "devTimeTracker.trackingInterval": 60000,
