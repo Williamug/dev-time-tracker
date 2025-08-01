@@ -19,7 +19,7 @@
     }
   ],
   "configuration": {
-    "title": "Nugsoft Dev Tracker Settings",
+    "title": "Dev Time Tracker Settings",
     "properties": {
       "devtimetracker.apiUrl": {
         "type": "string",

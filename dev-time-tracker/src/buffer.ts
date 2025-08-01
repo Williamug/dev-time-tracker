@@ -8,7 +8,7 @@ export interface RawEvent {
 
 export class EventBuffer {
   private buffer: RawEvent[] = [];
-  private timer?: NodeJS.Timer;
+  private timer?: NodeJS.Timeout;
   private readonly intervalMs = 30_000;   // flush every 30s
   private readonly batchSize = 20;
 
