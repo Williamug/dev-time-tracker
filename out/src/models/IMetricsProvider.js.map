@@ -1,0 +1,1 @@
+{"version":3,"file":"IMetricsProvider.js","sourceRoot":"","sources":["../../../src/models/IMetricsProvider.ts"],"names":[],"mappings":";;;AAuBA;;GAEG;AACH,MAAa,sBAAsB;IACjC,cAAc;QACZ,OAAO,EAAE,KAAK,EAAE,CAAC,EAAE,QAAQ,EAAE,GAAG,EAAE,CAAC;IACrC,CAAC;IAED,yBAAyB;QACvB,OAAO,CAAC,CAAC;IACX,CAAC;IAED,yBAAyB;QACvB,OAAO,SAAS,CAAC;IACnB,CAAC;CACF;AAZD,wDAYC"}
