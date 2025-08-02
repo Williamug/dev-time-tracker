@@ -84,7 +84,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         // Initialize services with backend support
         metricsService = MetricsService.getInstance(backendService);
         gitService = GitService.getInstance(backendService);
-        healthService = HealthService.getInstance(backendService);
+        healthService = HealthService.getInstance(backendService, ctx);
       } else {
         throw new Error('Backend initialization failed');
       }
@@ -94,7 +94,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       // Fall back to local mode
       metricsService = MetricsService.getInstance();
       gitService = GitService.getInstance();
-      healthService = HealthService.getInstance();
+      healthService = HealthService.getInstance(undefined, ctx);
     }
   } else {
     console.log('[Backend] No API URL configured, running in local mode');
