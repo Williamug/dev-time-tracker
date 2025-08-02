@@ -7,6 +7,7 @@ import { MetricsService } from './services/MetricsService';
 import { GitService } from './services/GitService';
 import { HealthService } from './services/HealthService';
 import { BackendService } from './services/BackendService';
+import { CustomReminderService } from './services/CustomReminderService';
 
 // Track user activity state
 let lastActivityTime = Date.now();
@@ -46,6 +47,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   let metricsService: MetricsService | null = null;
   let gitService: GitService | null = null;
   let healthService: HealthService | null = null;
+  let customReminderService: CustomReminderService | null = null;
 
   // Initialize backend service if configured
   if (apiUrl) {
@@ -85,6 +87,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
         metricsService = MetricsService.getInstance(backendService);
         gitService = GitService.getInstance(backendService);
         healthService = HealthService.getInstance(backendService, ctx);
+        customReminderService = CustomReminderService.getInstance(ctx);
       } else {
         throw new Error('Backend initialization failed');
       }
@@ -95,6 +98,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       metricsService = MetricsService.getInstance();
       gitService = GitService.getInstance();
       healthService = HealthService.getInstance(undefined, ctx);
+      customReminderService = CustomReminderService.getInstance(ctx);
     }
   } else {
     console.log('[Backend] No API URL configured, running in local mode');
@@ -103,6 +107,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     metricsService = MetricsService.getInstance();
     gitService = GitService.getInstance();
     healthService = HealthService.getInstance();
+    customReminderService = CustomReminderService.getInstance(ctx);
   }
   
   // Initialize status bar manager
