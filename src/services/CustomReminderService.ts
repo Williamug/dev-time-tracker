@@ -1,76 +1,171 @@
 import * as vscode from 'vscode';
-import { CustomReminder, ICustomReminder } from '../models/CustomReminder';
+import { CustomReminder, ICustomReminder, NotificationType, ICustomReminderAction, ICustomReminderConditions } from '../models/CustomReminder';
 import { NotificationManager } from '../utils/NotificationManager';
+import { IMetricsProvider, DefaultMetricsProvider } from '../models/IMetricsProvider';
+
+const STORAGE_KEY = 'devtimetracker.customReminders';
+
+interface ReminderCheckResult {
+  shouldTrigger: boolean;
+  reason?: string;
+}
 
 export class CustomReminderService {
-  private static instance: CustomReminderService;
+  private static instance: CustomReminderService | null = null;
   private reminders: Map<string, CustomReminder> = new Map();
-  private timer: NodeJS.Timeout | null = null;
-  private context: vscode.ExtensionContext;
   private notificationManager: NotificationManager;
-  private typingStats = { speed: 0, accuracy: 100 }; // Will be updated by metrics service
-  private activeDocumentLanguage: string | undefined;
-  private sessionStartTime: number = Date.now();
+  private checkInterval: NodeJS.Timeout | null = null;
+  private static readonly CHECK_INTERVAL = 30 * 1000; // 30 seconds
+  private context: vscode.ExtensionContext;
+  private isInitialized = false;
+  private pendingSave: NodeJS.Timeout | null = null;
+  private static readonly SAVE_DEBOUNCE = 1000; // 1 second debounce for saves
+  private metricsProvider: IMetricsProvider;
 
-  private constructor(context: vscode.ExtensionContext) {
-    this.context = context;
-    this.notificationManager = NotificationManager.getInstance();
-    this.loadReminders();
-    this.setupEventListeners();
-    this.startChecking();
+  /**
+   * Gets the current typing statistics from the metrics provider
+   */
+  public getTypingStats() {
+    return this.metricsProvider.getTypingStats();
   }
 
-  public static getInstance(context: vscode.ExtensionContext): CustomReminderService {
+  /**
+   * Gets the duration of the current coding session in seconds
+   */
+  public getCurrentSessionDuration(): number {
+    return this.metricsProvider.getCurrentSessionDuration();
+  }
+
+  /**
+   * Gets the language of the currently active document
+   */
+  public getActiveDocumentLanguage(): string | undefined {
+    return this.metricsProvider.getActiveDocumentLanguage();
+  }
+
+  private constructor(context: vscode.ExtensionContext, metricsProvider?: IMetricsProvider) {
+    this.context = context;
+    this.metricsProvider = metricsProvider || new DefaultMetricsProvider();
+    this.notificationManager = NotificationManager.getInstance();
+    this.initialize();
+  }
+
+  public static getInstance(context?: vscode.ExtensionContext, metricsProvider?: IMetricsProvider): CustomReminderService {
     if (!CustomReminderService.instance) {
-      CustomReminderService.instance = new CustomReminderService(context);
+      if (!context) {
+        throw new Error('CustomReminderService must be initialized with a context first');
+      }
+      CustomReminderService.instance = new CustomReminderService(context, metricsProvider);
     }
     return CustomReminderService.instance;
   }
 
-  private loadReminders() {
-    const savedReminders = this.context.globalState.get<ICustomReminder[]>('customReminders') || [];
-    this.reminders = new Map(
-      savedReminders.map(reminder => [reminder.id, new CustomReminder(reminder)])
+  private async initialize(): Promise<void> {
+    if (this.isInitialized) return;
+    
+    try {
+      await this.loadReminders();
+      this.setupEventListeners();
+      this.startChecking();
+      this.isInitialized = true;
+      console.log('[CustomReminderService] Initialized successfully');
+    } catch (error) {
+      console.error('[CustomReminderService] Initialization failed:', error);
+      throw error;
+    }
+  }
+
+  private async loadReminders(): Promise<void> {
+    try {
+      const savedReminders = this.context.globalState.get<ICustomReminder[]>(STORAGE_KEY, []);
+      this.reminders = new Map(
+        savedReminders.map(reminder => [reminder.id, CustomReminder.fromJSON(reminder)])
+      );
+      console.log(`[CustomReminderService] Loaded ${savedReminders.length} reminders`);
+    } catch (error) {
+      console.error('[CustomReminderService] Failed to load reminders:', error);
+      this.reminders = new Map(); // Reset to empty map on error
+    }
+  }
+
+  private async saveReminders(): Promise<void> {
+    // Debounce save operations to prevent rapid successive saves
+    if (this.pendingSave) {
+      clearTimeout(this.pendingSave);
+    }
+
+    return new Promise<void>((resolve, reject) => {
+      this.pendingSave = setTimeout(async () => {
+        try {
+          const reminders = Array.from(this.reminders.values()).map(r => r.toJSON());
+          await this.context.globalState.update(STORAGE_KEY, reminders);
+          console.log(`[CustomReminderService] Saved ${reminders.length} reminders`);
+          resolve();
+        } catch (error) {
+          console.error('[CustomReminderService] Failed to save reminders:', error);
+          reject(error);
+        } finally {
+          this.pendingSave = null;
+        }
+      }, CustomReminderService.SAVE_DEBOUNCE);
+    });
+  }
+
+  private setupEventListeners(): void {
+    // Listen for document changes to track typing activity
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeTextDocument(event => {
+        if (event.contentChanges.length > 0) {
+          this.checkTypingSpeed(event);
+        }
+      })
+    );
+
+    // Save reminders when the extension is deactivated
+    this.context.subscriptions.push({
+      dispose: async () => {
+        try {
+          await this.saveReminders();
+        } catch (error) {
+          console.error('[CustomReminderService] Error during cleanup:', error);
+        }
+      }
+    });
+
+    // Update active document language when editor changes
+    this.context.subscriptions.push(
+      vscode.window.onDidChangeActiveTextEditor(editor => {
+        // Active document language is now handled by the metrics provider
+      })
     );
   }
 
-  private async saveReminders() {
-    const reminders = Array.from(this.reminders.values()).map(r => r.toJSON());
-    await this.context.globalState.update('customReminders', reminders);
-  }
-
-  private setupEventListeners() {
-    // Update active document language when editor changes
-    vscode.window.onDidChangeActiveTextEditor(editor => {
-      this.activeDocumentLanguage = editor?.document.languageId;
-    });
-
-    // Update typing stats when metrics are updated
-    vscode.workspace.onDidChangeTextDocument(event => {
-      // This is a simplified example - in a real implementation, you would
-      // track actual typing speed and accuracy here
-      const content = event.document.getText();
-      const lines = content.split('\n').length;
-      // Simulate typing speed update (replace with real metrics)
-      this.typingStats.speed = Math.min(120, Math.max(20, lines / 5));
-    });
-  }
-
-  private startChecking() {
-    if (this.timer) {
-      clearInterval(this.timer);
+  private startChecking(): void {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
     }
-
-    // Check reminders every 30 seconds
-    this.timer = setInterval(() => this.checkReminders(), 30000);
+    
+    this.checkInterval = setInterval(async () => {
+      try {
+        await this.checkReminders();
+      } catch (error) {
+        console.error('[CustomReminderService] Error checking reminders:', error);
+      }
+    }, CustomReminderService.CHECK_INTERVAL);
   }
 
-  private async checkReminders() {
-    const now = Date.now();
-    const sessionDuration = (now - this.sessionStartTime) / 1000; // in seconds
+  private async checkTypingSpeed(event: vscode.TextDocumentChangeEvent): Promise<void> {
+    // Typing speed is now handled by the MetricsService
+    // This method is kept for backward compatibility
+  }
 
+  private async checkReminders(): Promise<void> {
+    const typingStats = this.metricsProvider.getTypingStats();
+    const sessionDuration = this.metricsProvider.getCurrentSessionDuration();
+    const language = this.metricsProvider.getActiveDocumentLanguage();
+    
     for (const [id, reminder] of this.reminders.entries()) {
-      if (reminder.shouldTrigger(this.typingStats, this.activeDocumentLanguage, sessionDuration)) {
+      if (reminder.shouldTrigger(typingStats, language, sessionDuration)) {
         await this.triggerReminder(reminder);
       }
     }
@@ -135,13 +230,25 @@ export class CustomReminderService {
   }
 
   public updateTypingStats(stats: { speed: number; accuracy: number }) {
-    this.typingStats = { ...stats };
+    // Stats are now managed by the MetricsService
+    // This method is kept for backward compatibility
   }
 
-  public dispose() {
-    if (this.timer) {
-      clearInterval(this.timer);
-      this.timer = null;
+  public dispose(): void {
+    if (this.checkInterval) {
+      clearInterval(this.checkInterval);
+      this.checkInterval = null;
+    }
+  }
+
+  /**
+   * Resets the singleton instance for testing purposes
+   * @internal
+   */
+  public static resetInstance(): void {
+    if (CustomReminderService.instance) {
+      CustomReminderService.instance.dispose();
+      CustomReminderService.instance = null;
     }
   }
 }

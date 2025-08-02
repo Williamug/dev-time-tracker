@@ -1,5 +1,20 @@
 import * as vscode from 'vscode';
 
+export interface ICustomReminderAction {
+  title: string;
+  action: string;
+  isPrimary?: boolean;
+}
+
+export interface ICustomReminderConditions {
+  minTypingSpeed?: number; // WPM
+  maxTypingSpeed?: number; // WPM
+  activeDocumentLanguage?: string[];
+  minSessionDuration?: number; // in seconds
+}
+
+export type NotificationType = 'info' | 'warning' | 'error' | 'none';
+
 export interface ICustomReminder {
   id: string;
   title: string;
@@ -7,19 +22,10 @@ export interface ICustomReminder {
   interval: number; // in seconds
   enabled: boolean;
   lastTriggered?: number;
-  conditions?: {
-    minTypingSpeed?: number; // WPM
-    maxTypingSpeed?: number; // WPM
-    activeDocumentLanguage?: string[];
-    minSessionDuration?: number; // in seconds
-  };
-  notificationType: 'info' | 'warning' | 'error' | 'none';
+  conditions?: ICustomReminderConditions;
+  notificationType: NotificationType;
   soundEnabled: boolean;
-  actions: Array<{
-    title: string;
-    action: string;
-    isPrimary?: boolean;
-  }>;
+  actions: ICustomReminderAction[];
 }
 
 export class CustomReminder implements ICustomReminder {
@@ -29,19 +35,10 @@ export class CustomReminder implements ICustomReminder {
   interval: number;
   enabled: boolean;
   lastTriggered?: number;
-  conditions?: {
-    minTypingSpeed?: number;
-    maxTypingSpeed?: number;
-    activeDocumentLanguage?: string[];
-    minSessionDuration?: number;
-  };
-  notificationType: 'info' | 'warning' | 'error' | 'none';
+  conditions?: ICustomReminderConditions;
+  notificationType: NotificationType;
   soundEnabled: boolean;
-  actions: Array<{
-    title: string;
-    action: string;
-    isPrimary?: boolean;
-  }>;
+  actions: ICustomReminderAction[];
 
   constructor(config: Partial<ICustomReminder>) {
     this.id = config.id || `reminder-${Date.now()}`;
@@ -95,6 +92,9 @@ export class CustomReminder implements ICustomReminder {
     return true;
   }
 
+  /**
+   * Serializes the reminder to a plain object for storage
+   */
   toJSON(): ICustomReminder {
     return {
       id: this.id,
@@ -103,10 +103,43 @@ export class CustomReminder implements ICustomReminder {
       interval: this.interval,
       enabled: this.enabled,
       lastTriggered: this.lastTriggered,
-      conditions: this.conditions,
+      conditions: this.conditions ? { ...this.conditions } : undefined,
       notificationType: this.notificationType,
       soundEnabled: this.soundEnabled,
-      actions: this.actions
+      actions: this.actions.map(action => ({
+        title: action.title,
+        action: action.action,
+        isPrimary: action.isPrimary
+      }))
     };
+  }
+
+  /**
+   * Creates a new CustomReminder instance from a plain object
+   */
+  static fromJSON(data: Partial<ICustomReminder>): CustomReminder {
+    return new CustomReminder({
+      id: data.id,
+      title: data.title,
+      message: data.message,
+      interval: data.interval,
+      enabled: data.enabled,
+      lastTriggered: data.lastTriggered,
+      conditions: data.conditions ? { ...data.conditions } : undefined,
+      notificationType: data.notificationType || 'info',
+      soundEnabled: data.soundEnabled !== undefined ? data.soundEnabled : true,
+      actions: (data.actions || []).map(action => ({
+        title: action.title,
+        action: action.action,
+        isPrimary: action.isPrimary
+      }))
+    });
+  }
+
+  /**
+   * Creates a deep clone of the reminder
+   */
+  clone(): CustomReminder {
+    return CustomReminder.fromJSON(this.toJSON());
   }
 }
