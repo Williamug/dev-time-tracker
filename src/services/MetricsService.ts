@@ -5,19 +5,36 @@ import { IMetricsCollector } from '../models/IMetricsCollector';
 import { ExtendedMetricsCollector } from '../models/ExtendedMetricsCollector';
 import { MetricsCollector } from '../models/Metrics';
 import { BackendService } from './BackendService';
+import { IMetricsProvider } from '../models/IMetricsProvider';
 
 interface SyncError {
   error: Error;
   timestamp: number;
 }
 
-export class MetricsService {
+export class MetricsService implements IMetricsProvider {
   private static instance: MetricsService;
   private metrics: Map<string, any> = new Map();
   private metricsCollector: IMetricsCollector;
   private baseCollector: IMetricsCollector;
   private disposables: vscode.Disposable[] = [];
   private syncInterval: NodeJS.Timeout | null = null;
+  private typingStats = { speed: 0, accuracy: 100 };
+  private sessionStartTime = Date.now();
+  private activeDocumentLanguage: string | undefined;
+  
+  // IMetricsProvider implementation
+  public getTypingStats() {
+    return { ...this.typingStats };
+  }
+
+  public getCurrentSessionDuration() {
+    return (Date.now() - this.sessionStartTime) / 1000; // in seconds
+  }
+
+  public getActiveDocumentLanguage() {
+    return this.activeDocumentLanguage;
+  }
   private lastSyncTime: Date | null = null;
   private backendService: BackendService | null = null;
   private apiUrl: string | null = null;
@@ -49,15 +66,21 @@ export class MetricsService {
 
   private constructor(backendService?: BackendService | null) {
     this.metrics = new Map();
-    // Initialize base metrics collector
     this.baseCollector = MetricsCollector.getInstance();
-    // Wrap with extended collector for additional functionality
     this.metricsCollector = ExtendedMetricsCollector.getInstance(this.baseCollector);
+    this.initialize();
+    
+    // Track active document language
+    this.activeDocumentLanguage = vscode.window.activeTextEditor?.document.languageId;
+    this.disposables.push(
+      vscode.window.onDidChangeActiveTextEditor(editor => {
+        this.activeDocumentLanguage = editor?.document.languageId;
+      })
+    );
     
     if (backendService) {
       this.backendService = backendService;
     }
-    this.initialize();
   }
 
   public static getInstance(backendService?: BackendService | null): MetricsService {
