@@ -32,13 +32,12 @@ A VS Code extension that tracks your development time, provides productivity ins
 ## Requirements
 
 - Visual Studio Code 1.75.0 or higher
-- Node.js 16.x or higher
 - Git (for commit statistics)
 
 ## Extension Settings
 
 ### Time Tracking
-"devTimeTracker.apiUrl": "https://your-api-url.com",
+<!-- "devTimeTracker.apiUrl": "https://your-api-url.com", -->
 ```json
 "devTimeTracker.apiToken": "your-api-token",
 "devTimeTracker.trackingInterval": 60000,
@@ -53,13 +52,48 @@ A VS Code extension that tracks your development time, provides productivity ins
 "devTimeTracker.notifications.position": "top-right"
 ```
 
-### Health Reminders
+### Health & Wellness Configuration
+
+#### Break Reminders
 ```json
-"devTimeTracker.health.breakReminderInterval": 3600000,
-"devTimeTracker.health.eyeStrainReminderInterval": 1800000,
-"devTimeTracker.health.postureReminderInterval": 2700000,
-"devTimeTracker.health.breakDuration": 300000
+"devtimetracker.health.breakReminderEnabled": true,
+"devtimetracker.health.breakReminderInterval": 3600,  // in seconds (60 minutes)
+"devtimetracker.health.breakReminderType": "info",    // "info" | "warning" | "error" | "none"
+"devtimetracker.health.breakEnableSound": true,
+"devtimetracker.health.breakSnoozeDuration": 900,     // in seconds (15 minutes)
+"devtimetracker.health.breakSnoozeEnabled": true
 ```
+
+#### Eye Strain Prevention
+```json
+"devtimetracker.health.eyeStrainEnabled": true,
+"devtimetracker.health.eyeStrainInterval": 1200,      // in seconds (20 minutes)
+"devtimetracker.health.eyeStrainNotificationType": "warning",  // "info" | "warning" | "error" | "none"
+"devtimetracker.health.eyeStrainEnableSound": true,
+"devtimetracker.health.eyeStrainSnoozeDuration": 600  // in seconds (10 minutes)
+```
+
+#### Posture Reminders
+```json
+"devtimetracker.health.postureReminderEnabled": true,
+"devtimetracker.health.postureReminderInterval": 1800,  // in seconds (30 minutes)
+"devtimetracker.health.postureNotificationType": "warning",  // "info" | "warning" | "error" | "none"
+"devtimetracker.health.postureEnableSound": true,
+"devtimetracker.health.postureSnoozeDuration": 900  // in seconds (15 minutes)
+```
+
+#### Notification Sounds
+```json
+"devtimetracker.health.breakReminderSound": true,
+"devtimetracker.health.breakReminderSoundFile": "default",
+"devtimetracker.health.breakReminderSoundVolume": 0.5,
+"devtimetracker.health.breakSnoozeSound": true,
+"devtimetracker.health.breakSnoozeSoundFile": "default",
+"devtimetracker.health.breakSnoozeSoundVolume": 0.5,
+"devtimetracker.health.eyeStrainNotificationSound": true
+```
+
+**Note:** All time intervals are specified in seconds. To convert to minutes, divide by 60 (e.g., 1200 seconds = 20 minutes).
 
 ## Usage
 
@@ -109,6 +143,18 @@ Initial release with core time tracking features
 - Git integration for commit statistics
 
 ### 1.2.0
+- Added Pomodoro timer
+- Enhanced notification animations
+- Improved audio feedback
+- Added project switching detection
+
+### 1.3.0
+- Added backend integration
+- Added project switching detection
+- Added health and wellness reminders
+
+
+### 1.4.0
 - Added Pomodoro timer
 - Enhanced notification animations
 - Improved audio feedback

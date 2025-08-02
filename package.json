@@ -1,0 +1,245 @@
+{
+  "name": "dev-time-tracker",
+  "displayName": "Dev Time Tracker",
+  "description": "Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.",
+  "version": "1.4.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/williamug/dev-time-tracker.git"
+  },
+  "engines": {
+    "vscode": "^1.99.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "publisher": "WilliamAsaba",
+  "activationEvents": [
+    "onStartupFinished",
+    "onCommand:devtimetracker.showStatus",
+    "onCommand:devtimetracker.togglePomodoro"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "devtimetracker.showStatus",
+        "title": "Show Active Coding Time"
+      },
+      {
+        "command": "devtimetracker.togglePomodoro",
+        "title": "Toggle Pomodoro Timer"
+      },
+      {
+        "command": "devtimetracker.openDashboard",
+        "title": "Open Analytics Dashboard"
+      }
+    ],
+    "configuration": {
+      "title": "Dev Time Tracker Settings",
+      "properties": {
+        "devtimetracker.apiUrl": {
+          "type": "string",
+          "default": "https://your-backend.com",
+          "description": "Base URL of your tracking API"
+        },
+        "devtimetracker.apiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Your API token"
+        },
+        "devtimetracker.pomodoro.workDuration": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "description": "Duration of work sessions in minutes"
+        },
+        "devtimetracker.pomodoro.shortBreakDuration": {
+          "type": "number",
+          "default": 5,
+          "minimum": 1,
+          "description": "Duration of short breaks in minutes"
+        },
+        "devtimetracker.pomodoro.longBreakDuration": {
+          "type": "number",
+          "default": 15,
+          "minimum": 1,
+          "description": "Duration of long breaks in minutes"
+        },
+        "devtimetracker.pomodoro.sessionsBeforeLongBreak": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "description": "Number of work sessions before a long break"
+        },
+        "devtimetracker.pomodoro.autoStartNextSession": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the next session/break when the current one ends"
+        },
+        "devtimetracker.metrics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable collection of code metrics and analytics"
+        },
+        "devtimetracker.metrics.syncInterval": {
+          "type": "number",
+          "default": 300,
+          "minimum": 60,
+          "description": "Interval in seconds to sync metrics with the backend"
+        },
+        "devtimetracker.health": {
+          "type": "object",
+          "title": "Health Reminders",
+          "properties": {
+            "breakEnableSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable sound for break reminders"
+            },
+            "breakNotificationType": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "none"],
+              "default": "info",
+              "description": "Type of notification to show for break reminders"
+            },
+            "breakReminderEnabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable/disable break reminders"
+            },
+            "breakReminderInterval": {
+              "type": "number",
+              "default": 3600,
+              "minimum": 0,
+              "description": "Time in seconds between break reminders (0 to disable)"
+            },
+            "breakReminderNotificationType": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "none"],
+              "default": "info",
+              "description": "Type of notification to show for break reminders"
+            },
+            "breakReminderSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable sound for break reminders"
+            },
+            "breakReminderSoundFile": {
+              "type": "string",
+              "default": "default",
+              "description": "Sound file to use for break reminders"
+            },
+            "breakReminderSoundVolume": {
+              "type": "number",
+              "default": 0.5,
+              "minimum": 0,
+              "maximum": 1,
+              "description": "Volume for break reminder sound (0-1)"
+            },
+            "breakReminderTime": {
+              "type": "number",
+              "default": 60,
+              "minimum": 1,
+              "description": "Duration of break in seconds"
+            },
+            "breakReminderType": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "none"],
+              "default": "info",
+              "description": "Type of notification to show for break reminders"
+            },
+            "breakSnoozeDuration": {
+              "type": "number",
+              "default": 900,
+              "description": "Time in seconds to snooze break reminders"
+            },
+            "postureReminderInterval": {
+              "type": "number",
+              "default": 1800,
+              "minimum": 0,
+              "description": "Time in seconds between posture reminders (0 to disable)"
+            },
+            "postureReminderEnabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable/disable posture check reminders"
+            },
+            "postureSnoozeDuration": {
+              "type": "number",
+              "default": 900,
+              "description": "Time in seconds to snooze posture reminders"
+            },
+            "postureNotificationType": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "none"],
+              "default": "info",
+              "description": "Type of notification to show for posture reminders"
+            },
+            "postureEnableSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable sound for posture reminders"
+            },
+            "eyeStrainInterval": {
+              "type": "number",
+              "default": 1200,
+              "minimum": 0,
+              "description": "Time in seconds between eye strain prevention reminders (0 to disable)"
+            },
+            "eyeStrainEnabled": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable/disable eye strain prevention reminders"
+            },
+            "eyeStrainSnoozeDuration": {
+              "type": "number",
+              "default": 600,
+              "description": "Time in seconds to snooze eye strain reminders"
+            },
+            "eyeStrainNotificationType": {
+              "type": "string",
+              "enum": ["info", "warning", "error", "none"],
+              "default": "info",
+              "description": "Type of notification to show for eye strain reminders"
+            },
+            "eyeStrainEnableSound": {
+              "type": "boolean",
+              "default": true,
+              "description": "Enable sound for eye strain reminders"
+            }
+          }
+        },
+        "devtimetracker.goals.dailyCodingTarget": {
+          "type": "number",
+          "default": 240,
+          "minimum": 15,
+          "description": "Daily coding target in minutes"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.99.0",
+    "@typescript-eslint/eslint-plugin": "^8.22.0",
+    "@typescript-eslint/parser": "^8.22.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1",
+    "eslint": "^9.19.0",
+    "typescript": "^5.7.3"
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "simple-git": "^3.28.0"
+  }
+}
