@@ -15,12 +15,33 @@
   ],
   "publisher": "WilliamAsaba",
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:devtimetracker.showStatus",
-    "onCommand:devtimetracker.togglePomodoro"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "devtimetracker.togglePomodoro",
+          "when": "true"
+        },
+        {
+          "command": "devtimetracker.manageCustomReminders",
+          "when": "true"
+        },
+        {
+          "command": "devtimetracker.addCustomReminder",
+          "when": "true"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "devtimetracker.manageCustomReminders",
+          "group": "navigation",
+          "when": "true"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "devtimetracker.showStatus",
@@ -33,6 +54,16 @@
       {
         "command": "devtimetracker.openDashboard",
         "title": "Open Analytics Dashboard"
+      },
+      {
+        "command": "devtimetracker.manageCustomReminders",
+        "title": "Manage Custom Reminders",
+        "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.addCustomReminder",
+        "title": "Add New Reminder",
+        "category": "Dev Time Tracker"
       }
     ],
     "configuration": {
@@ -99,7 +130,12 @@
             },
             "breakNotificationType": {
               "type": "string",
-              "enum": ["info", "warning", "error", "none"],
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
               "default": "info",
               "description": "Type of notification to show for break reminders"
             },
@@ -116,7 +152,12 @@
             },
             "breakReminderNotificationType": {
               "type": "string",
-              "enum": ["info", "warning", "error", "none"],
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
               "default": "info",
               "description": "Type of notification to show for break reminders"
             },
@@ -145,7 +186,12 @@
             },
             "breakReminderType": {
               "type": "string",
-              "enum": ["info", "warning", "error", "none"],
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
               "default": "info",
               "description": "Type of notification to show for break reminders"
             },
@@ -172,7 +218,12 @@
             },
             "postureNotificationType": {
               "type": "string",
-              "enum": ["info", "warning", "error", "none"],
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
               "default": "info",
               "description": "Type of notification to show for posture reminders"
             },
@@ -199,7 +250,12 @@
             },
             "eyeStrainNotificationType": {
               "type": "string",
-              "enum": ["info", "warning", "error", "none"],
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
               "default": "info",
               "description": "Type of notification to show for eye strain reminders"
             },
@@ -223,20 +279,18 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
     "watch": "tsc -watch -p ./",
-    "pretest": "npm run compile && npm run lint",
-    "lint": "eslint src",
-    "test": "vscode-test"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
+    "@types/node": "^20.19.9",
     "@types/vscode": "^1.99.0",
-    "@typescript-eslint/eslint-plugin": "^8.22.0",
-    "@typescript-eslint/parser": "^8.22.0",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1",
-    "eslint": "^9.19.0",
-    "typescript": "^5.7.3"
+    "jest": "^30.0.5",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.0.4"
   },
   "dependencies": {
     "axios": "^1.11.0",
