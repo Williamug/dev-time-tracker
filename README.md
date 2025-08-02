@@ -131,54 +131,16 @@ The notification system provides rich, interactive alerts:
 - Some metrics require Git repository initialization
 - Webview-based dashboard may have performance impact on older machines
 
-## Release Notes
+### Author
+William Asaba
 
-### 1.0.0
-Initial release with core time tracking features
+Email: [asabawilliam@gmail.com](mailto:asabawilliam@gmail.com)
 
-### 1.1.0
-- Added health and wellness reminders
-- Implemented rich notification system
-- Added status bar integration
-- Git integration for commit statistics
+GitHub: [williamug](https://github.com/williamug)
 
-### 1.2.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
-
-### 1.3.0
-- Added backend integration
-- Added project switching detection
-- Added health and wellness reminders
+LinkedIn: [william-asaba](https://www.linkedin.com/in/asaba-william-006aa1106/)
 
 
-### 1.4.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
 
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+### License
+This extension is licensed under the [MIT License](/dev-time-tracker/LICENSE).
