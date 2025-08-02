@@ -17,6 +17,7 @@ export class HealthService {
   private breakNotificationType: 'info' | 'warning' | 'error' | 'none' = 'warning';
   private breakEnableSound = true;
   private breakSnoozedUntil = 0;
+  private context?: vscode.ExtensionContext;
   
   // Posture reminder settings
   private postureReminderInterval = 30 * 60; // 30 minutes
@@ -42,7 +43,10 @@ export class HealthService {
   private eyeExerciseTimer: NodeJS.Timeout | null = null;
   private eyeStrainSnoozedUntil: number = 0;
 
-  private constructor(backendService?: BackendService) {
+  private constructor(backendService?: BackendService, context?: vscode.ExtensionContext) {
+    // Store context for state persistence
+    this.context = context;
+    
     // Load configuration first
     this.loadConfig();
     
@@ -51,19 +55,30 @@ export class HealthService {
     this.lastBreakTime = now;
     this.lastPostureCheck = now;
     this.lastEyeStrainBreak = now;
-    this.eyeStrainSnoozedUntil = 0;
     this.isActive = true;
     this.backendService = backendService || null;
+    
+    // Load persisted snooze states if available
+    if (this.context) {
+      this.breakSnoozedUntil = this.context.globalState.get<number>('breakSnoozedUntil') || 0;
+      this.eyeStrainSnoozedUntil = this.context.globalState.get<number>('eyeStrainSnoozedUntil') || 0;
+      this.postureSnoozedUntil = this.context.globalState.get<number>('postureSnoozedUntil') || 0;
+    }
     
     this.initialize();
   }
 
-  public static getInstance(backendService?: BackendService): HealthService {
+  public static getInstance(backendService?: BackendService, context?: vscode.ExtensionContext): HealthService {
     if (!HealthService.instance) {
-      HealthService.instance = new HealthService(backendService);
-    } else if (backendService) {
-      // Update backend service reference if provided
-      HealthService.instance.backendService = backendService;
+      HealthService.instance = new HealthService(backendService, context);
+    } else {
+      // Update references if provided
+      if (backendService) {
+        HealthService.instance.backendService = backendService;
+      }
+      if (context) {
+        HealthService.instance.context = context;
+      }
     }
     return HealthService.instance;
   }
@@ -246,6 +261,9 @@ export class HealthService {
           vscode.window.showInformationMessage(
             `Break reminder snoozed for ${this.breakSnoozeDuration / 60} minutes.`
           );
+          if (this.context) {
+            await this.context.globalState.update('breakSnoozedUntil', this.breakSnoozedUntil);
+          }
           break;
           
         case 'disableToday':
@@ -254,6 +272,9 @@ export class HealthService {
           tomorrow.setDate(tomorrow.getDate() + 1);
           tomorrow.setHours(0, 0, 0, 0);
           this.breakSnoozedUntil = tomorrow.getTime();
+          if (this.context) {
+            await this.context.globalState.update('breakSnoozedUntil', this.breakSnoozedUntil);
+          }
           vscode.window.showInformationMessage('Break reminders disabled for today.');
           break;
           
