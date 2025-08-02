@@ -110,7 +110,7 @@ async function activate(ctx) {
                 // Initialize services with backend support
                 metricsService = MetricsService_1.MetricsService.getInstance(backendService);
                 gitService = GitService_1.GitService.getInstance(backendService);
-                healthService = HealthService_1.HealthService.getInstance(backendService);
+                healthService = HealthService_1.HealthService.getInstance(backendService, ctx);
             }
             else {
                 throw new Error('Backend initialization failed');
@@ -122,7 +122,7 @@ async function activate(ctx) {
             // Fall back to local mode
             metricsService = MetricsService_1.MetricsService.getInstance();
             gitService = GitService_1.GitService.getInstance();
-            healthService = HealthService_1.HealthService.getInstance();
+            healthService = HealthService_1.HealthService.getInstance(undefined, ctx);
         }
     }
     else {
