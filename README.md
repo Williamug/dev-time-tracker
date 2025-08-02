@@ -1,6 +1,6 @@
 # Dev Time Tracker
 
-A VS Code extension that tracks your development time, provides productivity insights, and helps maintain healthy coding habits.
+Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.
 
 ## Features
 
