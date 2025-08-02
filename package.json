@@ -16,7 +16,7 @@
   "publisher": "WilliamAsaba",
   "icon": "images/logo.png",
   "galleryBanner": {
-    "color": "#1E1E1E",
+    "color": "#333333",
     "theme": "dark"
   },
   "activationEvents": [
