@@ -44,6 +44,8 @@ const MetricsService_1 = require("./services/MetricsService");
 const GitService_1 = require("./services/GitService");
 const HealthService_1 = require("./services/HealthService");
 const BackendService_1 = require("./services/BackendService");
+const CustomReminderService_1 = require("./services/CustomReminderService");
+const manageCustomReminders_1 = require("./commands/manageCustomReminders");
 // Track user activity state
 let lastActivityTime = Date.now();
 const INACTIVITY_THRESHOLD = 5000; // 5 seconds for testing (change to 300000 for 5 minutes in production)
@@ -76,6 +78,7 @@ async function activate(ctx) {
     let metricsService = null;
     let gitService = null;
     let healthService = null;
+    let customReminderService = null;
     // Initialize backend service if configured
     if (apiUrl) {
         try {
@@ -111,6 +114,7 @@ async function activate(ctx) {
                 metricsService = MetricsService_1.MetricsService.getInstance(backendService);
                 gitService = GitService_1.GitService.getInstance(backendService);
                 healthService = HealthService_1.HealthService.getInstance(backendService, ctx);
+                customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
             }
             else {
                 throw new Error('Backend initialization failed');
@@ -123,6 +127,7 @@ async function activate(ctx) {
             metricsService = MetricsService_1.MetricsService.getInstance();
             gitService = GitService_1.GitService.getInstance();
             healthService = HealthService_1.HealthService.getInstance(undefined, ctx);
+            customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
         }
     }
     else {
@@ -132,6 +137,7 @@ async function activate(ctx) {
         metricsService = MetricsService_1.MetricsService.getInstance();
         gitService = GitService_1.GitService.getInstance();
         healthService = HealthService_1.HealthService.getInstance();
+        customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
     }
     // Initialize status bar manager
     statusBarManager = statusBarManager_1.StatusBarManager.getInstance(ctx);
@@ -232,29 +238,38 @@ async function activate(ctx) {
         HealthService_1.HealthService.getInstance().dispose();
     }));
     // Register commands
-    const showStatus = vscode.commands.registerCommand('devtimetracker.showStatus', () => {
-        if (!statusBarManager)
-            return;
-        const sessionTime = statusBarManager.getSessionTime();
-        const todayTime = statusBarManager.getTodayTime();
-        const metrics = MetricsService_1.MetricsService.getInstance().getMetrics();
-        let message = `Current Session: ${sessionTime}\n` +
-            `Today's Total: ${todayTime}`;
-        if (metrics.code) {
-            message += `\n\nCode Metrics:`;
-            message += `\n- Lines: +${metrics.code.lines.added}/-${metrics.code.lines.removed}`;
-            message += `\n- Files: ${Object.keys(metrics.code.fileTypes).length} types`;
-        }
-        if (metrics.project?.currentProject) {
-            message += `\n\nCurrent Project: ${metrics.project.currentProject}`;
-        }
-        vscode.window.showInformationMessage(message);
-    });
-    ctx.subscriptions.push(showStatus);
-    const togglePomodoro = vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-        statusBarManager?.togglePomodoro();
-    });
-    ctx.subscriptions.push(togglePomodoro);
+    const commands = [
+        vscode.commands.registerCommand('devtimetracker.showStatus', () => {
+            if (!statusBarManager)
+                return;
+            const sessionTime = statusBarManager.getSessionTime();
+            const todayTime = statusBarManager.getTodayTime();
+            const metrics = MetricsService_1.MetricsService.getInstance().getMetrics();
+            let message = `Current Session: ${sessionTime}\n` +
+                `Today's Total: ${todayTime}`;
+            if (metrics.code) {
+                message += `\n\nCode Metrics:`;
+                message += `\n- Lines: +${metrics.code.lines.added}/-${metrics.code.lines.removed}`;
+                message += `\n- Files: ${Object.keys(metrics.code.fileTypes).length} types`;
+            }
+            if (metrics.project?.currentProject) {
+                message += `\n\nCurrent Project: ${metrics.project.currentProject}`;
+            }
+            vscode.window.showInformationMessage(message);
+        }),
+        vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
+            statusBarManager?.togglePomodoro();
+        }),
+        vscode.commands.registerCommand('devtimetracker.manageCustomReminders', () => {
+            vscode.commands.executeCommand('devtimetracker.manageCustomReminders');
+        }),
+        vscode.commands.registerCommand('devtimetracker.addCustomReminder', () => {
+            vscode.commands.executeCommand('devtimetracker.addCustomReminder');
+        })
+    ];
+    // Register custom reminder commands
+    (0, manageCustomReminders_1.registerCustomReminderCommands)(ctx);
+    ctx.subscriptions.push(...commands);
     // Initial update of activity status
     updateActivityStatus();
 }
