@@ -139,7 +139,7 @@
             },
             "breakReminderTime": {
               "type": "number",
-              "default": 60,
+              "default": 1200,
               "minimum": 1,
               "description": "Duration of break in seconds"
             },
@@ -194,7 +194,7 @@
             },
             "eyeStrainSnoozeDuration": {
               "type": "number",
-              "default": 600,
+              "default": 900,
               "description": "Time in seconds to snooze eye strain reminders"
             },
             "eyeStrainNotificationType": {
@@ -212,7 +212,7 @@
         },
         "devtimetracker.goals.dailyCodingTarget": {
           "type": "number",
-          "default": 240,
+          "default": 1200,
           "minimum": 15,
           "description": "Daily coding target in minutes"
         }
