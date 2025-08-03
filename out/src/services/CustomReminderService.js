@@ -36,20 +36,18 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.CustomReminderService = void 0;
 const vscode = __importStar(require("vscode"));
 const CustomReminder_1 = require("../models/CustomReminder");
-const NotificationManager_1 = require("../utils/NotificationManager");
 const IMetricsProvider_1 = require("../models/IMetricsProvider");
 const STORAGE_KEY = 'devtimetracker.customReminders';
 class CustomReminderService {
+    metricsProvider;
     static instance = null;
     reminders = new Map();
-    notificationManager;
     checkInterval = null;
     static CHECK_INTERVAL = 30 * 1000; // 30 seconds
     context;
     isInitialized = false;
     pendingSave = null;
     static SAVE_DEBOUNCE = 1000; // 1 second debounce for saves
-    metricsProvider;
     /**
      * Gets the current typing statistics from the metrics provider
      */
@@ -68,11 +66,10 @@ class CustomReminderService {
     getActiveDocumentLanguage() {
         return this.metricsProvider.getActiveDocumentLanguage();
     }
-    constructor(context, metricsProvider) {
+    constructor(context, metricsProvider = new IMetricsProvider_1.DefaultMetricsProvider()) {
+        this.metricsProvider = metricsProvider;
         this.context = context;
-        this.metricsProvider = metricsProvider || new IMetricsProvider_1.DefaultMetricsProvider();
-        this.notificationManager = NotificationManager_1.NotificationManager.getInstance();
-        this.initialize();
+        this.loadReminders();
     }
     static getInstance(context, metricsProvider) {
         if (!CustomReminderService.instance) {
@@ -178,30 +175,42 @@ class CustomReminderService {
         const language = this.metricsProvider.getActiveDocumentLanguage();
         for (const [id, reminder] of this.reminders.entries()) {
             if (reminder.shouldTrigger(typingStats, language, sessionDuration)) {
-                await this.triggerReminder(reminder);
+                await this.showReminder(reminder, 'Reminder triggered');
             }
         }
     }
-    async triggerReminder(reminder) {
-        // Update last triggered time
-        reminder.lastTriggered = Date.now();
-        // Show notification (use 'info' if notificationType is 'none')
-        const notificationType = reminder.notificationType === 'none' ? 'info' : reminder.notificationType;
-        const result = await this.notificationManager.showNotificationCard({
-            title: reminder.title,
-            message: reminder.message,
-            type: notificationType,
-            sound: reminder.soundEnabled ? 'alert' : undefined,
-            actions: reminder.actions
-        });
-        // Handle the selected action
-        if (result === 'snooze') {
+    async showReminder(reminder, reason) {
+        // Don't show any popup notifications - just log to console
+        console.log(`[CustomReminder] ${reminder.title}: ${reminder.message} (${reason})`);
+        // Show in status bar instead of popup
+        const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
+        statusBar.text = `$(bell) ${reminder.title}`;
+        statusBar.tooltip = `${reminder.message}\n\n${reason}`;
+        statusBar.show();
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            statusBar.dispose();
+        }, 10000);
+    }
+    getNotificationType(type) {
+        if (type === 'none' || type === 'info')
+            return 'info';
+        if (type === 'warning')
+            return 'warning';
+        if (type === 'error')
+            return 'error';
+        return 'info';
+    }
+    handleAction(reminder, action) {
+        // Handle snooze action
+        if (action.action.toLowerCase() === 'snooze') {
             // Default snooze for 30 minutes
             reminder.lastTriggered = Date.now() + (30 * 60 * 1000);
-            vscode.window.showInformationMessage(`"${reminder.title}" snoozed for 30 minutes`);
+            console.log(`[CustomReminder] "${reminder.title}" snoozed for 30 minutes`);
         }
+        // Add more action types as needed
         // Save the updated reminder
-        await this.saveReminders();
+        this.saveReminders();
     }
     // Public API
     async addReminder(reminder) {
