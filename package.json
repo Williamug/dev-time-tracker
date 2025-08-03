@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.",
-  "version": "1.4.2",
+  "version": "1.5.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
@@ -127,130 +127,44 @@
         "devtimetracker.health": {
           "type": "object",
           "title": "Health Reminders",
+          "description": "Health reminders will appear in the status bar. They are non-intrusive and won't interrupt your workflow.",
           "properties": {
-            "breakEnableSound": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable sound for break reminders"
-            },
-            "breakNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "info",
-              "description": "Type of notification to show for break reminders"
-            },
             "breakReminderEnabled": {
               "type": "boolean",
               "default": true,
-              "description": "Enable/disable break reminders"
+              "description": "Enable break reminders in the status bar"
             },
             "breakReminderInterval": {
               "type": "number",
               "default": 3600,
-              "minimum": 0,
-              "description": "Time in seconds between break reminders (0 to disable)"
-            },
-            "breakReminderNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "info",
-              "description": "Type of notification to show for break reminders"
-            },
-            "breakReminderSound": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable sound for break reminders"
-            },
-            "breakReminderSoundFile": {
-              "type": "string",
-              "default": "default",
-              "description": "Sound file to use for break reminders"
-            },
-            "breakReminderSoundVolume": {
-              "type": "number",
-              "default": 0.5,
-              "minimum": 0,
-              "maximum": 1,
-              "description": "Volume for break reminder sound (0-1)"
-            },
-            "breakReminderTime": {
-              "type": "number",
-              "default": 1200,
-              "minimum": 1,
-              "description": "Duration of break in seconds"
-            },
-            "breakReminderType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "info",
-              "description": "Type of notification to show for break reminders"
-            },
-            "breakSnoozeDuration": {
-              "type": "number",
-              "default": 900,
-              "description": "Time in seconds to snooze break reminders"
-            },
-            "postureReminderInterval": {
-              "type": "number",
-              "default": 1800,
-              "minimum": 0,
-              "description": "Time in seconds between posture reminders (0 to disable)"
+              "minimum": 300,
+              "description": "Time in seconds between break reminders (minimum 5 minutes)"
             },
             "postureReminderEnabled": {
               "type": "boolean",
               "default": true,
-              "description": "Enable/disable posture check reminders"
+              "description": "Enable posture reminders in the status bar"
             },
-            "postureSnoozeDuration": {
+            "postureReminderInterval": {
               "type": "number",
-              "default": 900,
-              "description": "Time in seconds to snooze posture reminders"
+              "default": 1800,
+              "minimum": 300,
+              "description": "Time in seconds between posture reminders (minimum 5 minutes)"
             },
-            "postureNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "info",
-              "description": "Type of notification to show for posture reminders"
-            },
-            "postureEnableSound": {
+            "eyeStrainReminderEnabled": {
               "type": "boolean",
               "default": true,
-              "description": "Enable sound for posture reminders"
+              "description": "Enable eye strain reminders in the status bar"
             },
-            "eyeStrainInterval": {
+            "eyeStrainReminderInterval": {
               "type": "number",
               "default": 1200,
-              "minimum": 0,
-              "description": "Time in seconds between eye strain prevention reminders (0 to disable)"
-            },
-            "eyeStrainEnabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable/disable eye strain prevention reminders"
+              "minimum": 300,
+              "description": "Time in seconds between eye strain reminders (minimum 5 minutes)"
             },
             "eyeStrainSnoozeDuration": {
               "type": "number",
-              "default": 900,
+              "default": 300,
               "description": "Time in seconds to snooze eye strain reminders"
             },
             "eyeStrainNotificationType": {
@@ -261,13 +175,29 @@
                 "error",
                 "none"
               ],
-              "default": "info",
+              "default": "none",
               "description": "Type of notification to show for eye strain reminders"
             },
             "eyeStrainEnableSound": {
               "type": "boolean",
-              "default": true,
+              "default": false,
               "description": "Enable sound for eye strain reminders"
+            },
+            "postureNotificationType": {
+              "type": "string",
+              "enum": [
+                "info",
+                "warning",
+                "error",
+                "none"
+              ],
+              "default": "none",
+              "description": "Type of notification to show for posture reminders"
+            },
+            "postureEnableSound": {
+              "type": "boolean",
+              "default": false,
+              "description": "Enable sound for posture reminders"
             }
           }
         },
