@@ -285,15 +285,10 @@ export class StatusBarManager {
                     // Reset session start time to today
                     this.sessionStartTime = new Date();
                     this.idleTime = 0;
+                    
+                    // Update the display to reflect the reset
+                    this.updateSessionTimer();
                 }
-                
-                // Update the display to reflect the reset
-                this.updateSessionTimer();
-                
-                // Show a notification about the reset
-                vscode.window.showInformationMessage(
-                    'A new day has started. Your coding session timer has been reset.'
-                );
             }
         } catch (error) {
             console.error('[StatusBar] Error checking for day change:', error);
@@ -404,7 +399,15 @@ export class StatusBarManager {
             // Break ended, start a work session
             this.isBreakTime = false;
             const message = 'Break time is over! Time to focus.';
-            vscode.window.showInformationMessage(message);
+            // Show notification in status bar instead of popup
+            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+            statusBarItem.text = `$(info) ${message}`;
+            statusBarItem.show();
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusBarItem.dispose();
+            }, 5000);
             
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();
@@ -427,7 +430,15 @@ export class StatusBarManager {
                 ? `Pomodoro session complete! Time for a long ${breakDuration}-minute break.`
                 : `Pomodoro session complete! Time for a ${breakDuration}-minute break.`;
             
-            vscode.window.showInformationMessage(message);
+            // Show notification in status bar instead of popup
+            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+            statusBarItem.text = `$(info) ${message}`;
+            statusBarItem.show();
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusBarItem.dispose();
+            }, 5000);
             
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();

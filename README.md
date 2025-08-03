@@ -1,6 +1,6 @@
 # Dev Time Tracker
 
-A VS Code extension that tracks your development time, provides productivity insights, and helps maintain healthy coding habits.
+Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.
 
 ## Features
 
@@ -34,23 +34,42 @@ A VS Code extension that tracks your development time, provides productivity ins
 - Visual Studio Code 1.75.0 or higher
 - Git (for commit statistics)
 
-## Extension Settings
+## Backend Integration
+
+The extension can integrate with a backend service for data persistence and synchronization across devices. The backend service provides:
+
+- Session data storage
+- Metrics aggregation
+- Cross-device synchronization
+- Team features (coming soon)
+
+### Backend Configuration
+
+To enable backend integration, add these settings to your VS Code settings (JSON):
+
+<!-- ```json
+"devtimetracker.apiUrl": "https://your-api-url.com",
+"devtimetracker.apiToken": "your-api-token-here"
+``` -->
 
 ### Time Tracking
-<!-- "devTimeTracker.apiUrl": "https://your-api-url.com", -->
+
 ```json
-"devTimeTracker.apiToken": "your-api-token",
-"devTimeTracker.trackingInterval": 60000,
-"devTimeTracker.idleTimeout": 300000
+"devtimetracker.trackingInterval": 60000,
+"devtimetracker.idleTimeout": 300000,
+"devtimetracker.enableOfflineMode": true
 ```
 
 ### Notification Settings
+
 ```json
-"devTimeTracker.notifications.enabled": true,
-"devTimeTracker.notifications.sounds": true,
-"devTimeTracker.notifications.volume": 0.5,
-"devTimeTracker.notifications.position": "top-right"
+"devtimetracker.notifications.enabled": true,
+"devtimetracker.notifications.sounds": true,
+"devtimetracker.notifications.volume": 0.5,
+"devtimetracker.notifications.position": "statusBar"
 ```
+
+> **Note:** The notification system now primarily uses the status bar for non-intrusive reminders. Popup notifications are disabled by default.
 
 ### Health & Wellness Configuration
 
@@ -95,6 +114,46 @@ A VS Code extension that tracks your development time, provides productivity ins
 
 **Note:** All time intervals are specified in seconds. To convert to minutes, divide by 60 (e.g., 1200 seconds = 20 minutes).
 
+## Troubleshooting
+
+### Health Reminders Not Showing
+
+If health reminders are not appearing in the status bar:
+
+1. **Check Extension Logs**:
+   - Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+   - Run "Developer: Open Extension Logs"
+   - Look for errors related to HealthService or HealthStatusBar
+
+2. **Verify Configuration**:
+   - Ensure health reminders are enabled in settings:
+     ```json
+     "devtimetracker.health.breakReminderEnabled": true,
+     "devtimetracker.health.postureReminderEnabled": true,
+     "devtimetracker.health.eyeStrainEnabled": true
+     ```
+
+3. **Check Status Bar Space**:
+   - The status bar has limited space
+   - Try collapsing other status bar items
+   - Check if reminders appear when you click the status bar area
+
+### Backend Connection Issues
+
+If you experience issues with the backend connection:
+
+1. **Verify API Configuration**:
+   - Check that `devtimetracker.apiUrl` is correctly set
+   - Ensure your API token in `devtimetracker.apiToken` is valid
+
+2. **Check Network Connectivity**:
+   - Verify you can access the API URL from your machine
+   - Check for any firewall or proxy issues
+
+3. **Inspect Console Logs**:
+   - Open Developer Tools (Help > Toggle Developer Tools)
+   - Check the Console tab for network or authentication errors
+
 ## Usage
 
 ### Basic Commands
@@ -131,54 +190,16 @@ The notification system provides rich, interactive alerts:
 - Some metrics require Git repository initialization
 - Webview-based dashboard may have performance impact on older machines
 
-## Release Notes
+### Author
+William Asaba
 
-### 1.0.0
-Initial release with core time tracking features
+Email: [asabawilliam@gmail.com](mailto:asabawilliam@gmail.com)
 
-### 1.1.0
-- Added health and wellness reminders
-- Implemented rich notification system
-- Added status bar integration
-- Git integration for commit statistics
+GitHub: [williamug](https://github.com/williamug)
 
-### 1.2.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
-
-### 1.3.0
-- Added backend integration
-- Added project switching detection
-- Added health and wellness reminders
+LinkedIn: [william-asaba](https://www.linkedin.com/in/asaba-william-006aa1106/)
 
 
-### 1.4.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
 
----
-
-## Following extension guidelines
-
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
-
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
-
-## Working with Markdown
-
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
-
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
-
-## For more information
-
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
-
-**Enjoy!**
+### License
+This extension is licensed under the [MIT License](/dev-time-tracker/LICENSE).
