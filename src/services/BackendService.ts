@@ -53,6 +53,7 @@ export class BackendService {
         return config;
       },
       (error) => {
+        console.error('Request setup error:', error);
         return Promise.reject(error);
       }
     );
@@ -61,32 +62,41 @@ export class BackendService {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
+        let errorMessage = 'An error occurred';
+        
         if (error.response) {
           // Handle specific HTTP error statuses
           switch (error.response.status) {
             case 401:
-              vscode.window.showErrorMessage('Authentication failed. Please check your API token.');
+              errorMessage = 'Authentication failed. Please check your API token.';
               break;
             case 403:
-              vscode.window.showErrorMessage('Permission denied. You do not have access to this resource.');
+              errorMessage = 'Permission denied. You do not have access to this resource.';
               break;
             case 404:
-              vscode.window.showErrorMessage('The requested resource was not found.');
+              errorMessage = 'The requested resource was not found.';
               break;
             case 500:
-              vscode.window.showErrorMessage('An internal server error occurred. Please try again later.');
+              errorMessage = 'An internal server error occurred. Please try again later.';
               break;
             default:
-              vscode.window.showErrorMessage(`Request failed with status ${error.response.status}`);
+              errorMessage = `Request failed with status ${error.response.status}`;
           }
+          console.error('API Error:', errorMessage);
         } else if (error.request) {
           // The request was made but no response was received
-          vscode.window.showErrorMessage('No response received from the server. Please check your connection.');
+          errorMessage = 'No response received from the server. Please check your connection.';
+          console.error('Network Error:', errorMessage);
         } else {
           // Something happened in setting up the request
-          vscode.window.showErrorMessage(`Error: ${error.message}`);
+          errorMessage = `Error: ${error.message}`;
+          console.error('Request Error:', errorMessage);
         }
-        return Promise.reject(error);
+        
+        // Add error to the error log that can be viewed via a command
+        this.logError(errorMessage);
+        
+        return Promise.reject(new Error(errorMessage));
       }
     );
   }
@@ -96,6 +106,12 @@ export class BackendService {
       BackendService.instance = new BackendService();
     }
     return BackendService.instance;
+  }
+  
+  private logError(message: string) {
+    // Log errors to the extension's output channel
+    const outputChannel = vscode.window.createOutputChannel('Dev Time Tracker');
+    outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
   }
 
   public async initialize(): Promise<boolean> {
