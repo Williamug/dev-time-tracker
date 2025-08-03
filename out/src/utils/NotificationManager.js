@@ -136,29 +136,60 @@ class NotificationManager {
     }
     showNotificationCard(options) {
         const { title, message, type = 'info', actions = [], timeout } = options;
-        // Create a webview panel for rich notifications
-        if (!this.webviewPanel) {
-            this.webviewPanel = vscode.window.createWebviewPanel(NotificationManager.viewType, title, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: true });
-            this.webviewPanel.onDidDispose(() => {
-                this.webviewPanel = null;
-            });
-            this.webviewPanel.webview.onDidReceiveMessage(async (message) => {
-                if (message.command === 'action') {
-                    if (this.webviewPanel) {
-                        this.webviewPanel.dispose();
-                    }
+        // Create a promise that will be resolved when an action is taken
+        return new Promise((resolve) => {
+            // Create a temporary panel for the notification
+            const panel = vscode.window.createWebviewPanel(NotificationManager.viewType, title, { viewColumn: vscode.ViewColumn.Beside, preserveFocus: true }, { enableScripts: true, retainContextWhenHidden: true });
+            // Handle panel disposal
+            panel.onDidDispose(() => {
+                // If the panel is closed without taking an action, resolve with undefined
+                if (!panel.dispose) {
+                    resolve(undefined);
+                }
+                // Clean up the webview panel reference if it's the current one
+                if (this.webviewPanel === panel) {
+                    this.webviewPanel = null;
                 }
             });
-        }
-        else {
-            this.webviewPanel.title = title;
-            this.webviewPanel.reveal();
-        }
-        // Play sound if specified
-        this.playSound(options.sound || (type === 'error' ? 'error' : 'default'));
-        // Generate HTML for the notification card
+            // Handle messages from the webview
+            panel.webview.onDidReceiveMessage(async (message) => {
+                if (message.command === 'action') {
+                    // Store the action to resolve the promise
+                    const action = message.action;
+                    // Mark that we're disposing with an action
+                    panel.dispose = true;
+                    // Close the panel
+                    panel.dispose();
+                    // Resolve the promise with the selected action
+                    resolve(action);
+                }
+            });
+            // Set the webview content
+            panel.webview.html = this.getWebviewContent(panel, { title, message, type, actions, showProgress: options.showProgress, progressValue: options.progressValue });
+            // Play sound if specified
+            this.playSound(options.sound || (type === 'error' ? 'error' : 'default'));
+            // Set a timeout if specified
+            if (timeout) {
+                setTimeout(() => {
+                    if (!panel.dispose) {
+                        panel.dispose = true;
+                        panel.dispose();
+                        resolve(undefined);
+                    }
+                }, timeout * 1000);
+            }
+            // Store the current panel reference
+            this.webviewPanel = panel;
+        });
+    }
+    getWebviewContent(panel, options) {
+        const { title, message, type, actions, showProgress, progressValue } = options;
         const icon = this.getIconForType(type);
-        const buttons = actions
+        const borderColor = this.getBorderColorForType(type);
+        const iconColor = this.getIconColorForType(type);
+        const headerBgColor = this.getHeaderBgColorForType(type);
+        // Generate action buttons
+        const actionButtons = actions
             .map((action) => `
         <button 
           class="action-button ${action.isPrimary ? 'primary' : 'secondary'}" 
@@ -168,18 +199,12 @@ class NotificationManager {
           ${action.title}
         </button>`)
             .join('');
-        const progressBar = options.showProgress ? `
+        // Generate progress bar if needed
+        const progressBarHtml = showProgress ? `
       <div class="progress-container">
-        <div 
-          class="progress-bar" 
-          style="width: ${Math.min(100, Math.max(0, options.progressValue || 0))}%"
-          role="progressbar"
-          aria-valuenow="${options.progressValue || 0}"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        ></div>
+        <div class="progress-bar" style="width: ${progressValue || 0}%;"></div>
       </div>` : '';
-        const html = `
+        return `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -187,104 +212,85 @@ class NotificationManager {
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>${title}</title>
         <style>
-          @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-          }
-          
-          @keyframes progress {
-            from { width: 100%; }
-            to { width: 0%; }
-          }
-          
           body {
             font-family: var(--vscode-font-family);
-            padding: 0;
-            background-color: transparent;
-            color: var(--vscode-foreground);
             margin: 0;
-            animation: slideIn 0.3s ease-out forwards;
+            padding: 0;
+            color: var(--vscode-foreground);
+            background-color: var(--vscode-editor-background);
           }
           .notification-card {
-            border-left: 4px solid ${this.getBorderColorForType(type)};
-            background-color: var(--vscode-notifications-background);
+            border-left: 4px solid ${borderColor};
             border-radius: 4px;
-            box-shadow: 0 2px 8px var(--vscode-widget-shadow);
-            overflow: hidden;
+            background-color: var(--vscode-notifications-background);
+            box-shadow: 0 0 8px rgba(0, 0, 0, 0.2);
             max-width: 400px;
-            margin: 16px;
-            transition: transform 0.2s, opacity 0.2s;
-          }
-          
-          .notification-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px var(--vscode-widget-shadow);
+            margin: 0 auto;
+            overflow: hidden;
           }
           .notification-header {
             display: flex;
             align-items: center;
             padding: 12px 16px;
-            background-color: ${this.getHeaderBgColorForType(type)};
+            background-color: ${headerBgColor};
+            color: white;
           }
           .notification-icon {
-            margin-right: 12px;
             font-size: 18px;
-            color: ${this.getIconColorForType(type)};
+            margin-right: 8px;
+            color: ${iconColor};
           }
           .notification-title {
-            margin: 0;
             font-weight: 600;
             font-size: 14px;
+            margin: 0;
           }
-          .notification-content {
+          .notification-body {
             padding: 16px;
+          }
+          .notification-message {
+            margin: 0 0 16px 0;
+            white-space: pre-line;
             line-height: 1.5;
-            font-size: 13px;
           }
           .notification-actions {
             display: flex;
-            justify-content: flex-end;
-            padding: 8px 16px 12px;
             gap: 8px;
+            margin-top: 16px;
           }
           .action-button {
-            padding: 6px 16px;
-            border: 1px solid transparent;
-            border-radius: 4px;
-            background-color: var(--vscode-button-secondaryBackground);
-            color: var(--vscode-button-secondaryForeground);
+            padding: 6px 12px;
+            border: none;
+            border-radius: 2px;
             cursor: pointer;
             font-size: 12px;
-            font-weight: 500;
-            transition: all 0.2s ease;
-            margin-left: 8px;
+            font-weight: 600;
+            transition: background-color 0.2s;
           }
-          
           .action-button.primary {
             background-color: var(--vscode-button-background);
             color: var(--vscode-button-foreground);
           }
-          
-          .action-button:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
+          .action-button.primary:hover {
+            background-color: var(--vscode-button-hoverBackground);
           }
-          
-          .action-button:active {
-            transform: translateY(0);
+          .action-button.secondary {
+            background-color: var(--vscode-button-secondaryBackground);
+            color: var(--vscode-button-secondaryForeground);
           }
-          
+          .action-button.secondary:hover {
+            background-color: var(--vscode-button-secondaryHoverBackground);
+          }
           .progress-container {
             height: 4px;
             background-color: var(--vscode-progressBar-background);
             border-radius: 2px;
-            margin: 8px 0;
+            margin-top: 12px;
             overflow: hidden;
           }
-          
           .progress-bar {
             height: 100%;
-            background-color: ${this.getBorderColorForType(type)};
+            background-color: ${borderColor};
             transition: width 0.3s ease;
           }
         </style>
@@ -293,49 +299,45 @@ class NotificationManager {
         <div class="notification-card">
           <div class="notification-header">
             <span class="notification-icon">${icon}</span>
-            <h3 class="notification-title">${title}</h3>
+            <h2 class="notification-title">${title}</h2>
           </div>
-          <div class="notification-content">
-            ${message.replace(/\n/g, '<br>')}
-          </div>
-          ${actions.length > 0 ? `
+          <div class="notification-body">
+            <p class="notification-message">${message}</p>
+            ${progressBarHtml}
             <div class="notification-actions">
-              ${buttons}
+              ${actionButtons}
             </div>
-          ` : ''}
+          </div>
         </div>
+
         <script>
-          const vscode = acquireVsCodeApi();
-          document.querySelectorAll('.action-button').forEach(button => {
-            button.addEventListener('click', () => {
-              vscode.postMessage({
-                command: 'action',
-                action: button.dataset.action
+          (function() {
+            const vscode = acquireVsCodeApi();
+            const buttons = document.querySelectorAll('.action-button');
+            
+            buttons.forEach(button => {
+              button.addEventListener('click', () => {
+                const action = button.getAttribute('data-action');
+                vscode.postMessage({
+                  command: 'action',
+                  action: action
+                });
               });
             });
-          });
+            
+            // Auto-close after timeout if specified
+            ${options.timeout ? `
+            setTimeout(() => {
+              vscode.postMessage({
+                command: 'action',
+                action: 'timeout'
+              });
+            }, ${options.timeout * 1000});` : ''}
+          })();
         </script>
       </body>
       </html>
     `;
-        this.webviewPanel.webview.html = html;
-        // Set up promise to handle actions
-        return new Promise((resolve) => {
-            const disposable = this.webviewPanel?.webview.onDidReceiveMessage((message) => {
-                if (message.command === 'action') {
-                    disposable?.dispose();
-                    resolve(message.action);
-                }
-            });
-            if (timeout) {
-                setTimeout(() => {
-                    if (this.webviewPanel) {
-                        this.webviewPanel.dispose();
-                        resolve(undefined);
-                    }
-                }, timeout);
-            }
-        });
     }
     async playSound(type = 'default') {
         if (type === 'none' || !this.audioContext)
@@ -374,7 +376,7 @@ class NotificationManager {
     getIconForType(type) {
         switch (type) {
             case 'warning':
-                return '⚠️';
+                return '';
             case 'error':
                 return '❌';
             case 'success':
