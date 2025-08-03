@@ -34,23 +34,42 @@ Dev Time Tracker is an extension that helps developers track their productivity 
 - Visual Studio Code 1.75.0 or higher
 - Git (for commit statistics)
 
-## Extension Settings
+## Backend Integration
+
+The extension can integrate with a backend service for data persistence and synchronization across devices. The backend service provides:
+
+- Session data storage
+- Metrics aggregation
+- Cross-device synchronization
+- Team features (coming soon)
+
+### Backend Configuration
+
+To enable backend integration, add these settings to your VS Code settings (JSON):
+
+<!-- ```json
+"devtimetracker.apiUrl": "https://your-api-url.com",
+"devtimetracker.apiToken": "your-api-token-here"
+``` -->
 
 ### Time Tracking
-<!-- "devTimeTracker.apiUrl": "https://your-api-url.com", -->
+
 ```json
-"devTimeTracker.apiToken": "your-api-token",
-"devTimeTracker.trackingInterval": 60000,
-"devTimeTracker.idleTimeout": 300000
+"devtimetracker.trackingInterval": 60000,
+"devtimetracker.idleTimeout": 300000,
+"devtimetracker.enableOfflineMode": true
 ```
 
 ### Notification Settings
+
 ```json
-"devTimeTracker.notifications.enabled": true,
-"devTimeTracker.notifications.sounds": true,
-"devTimeTracker.notifications.volume": 0.5,
-"devTimeTracker.notifications.position": "top-right"
+"devtimetracker.notifications.enabled": true,
+"devtimetracker.notifications.sounds": true,
+"devtimetracker.notifications.volume": 0.5,
+"devtimetracker.notifications.position": "statusBar"
 ```
+
+> **Note:** The notification system now primarily uses the status bar for non-intrusive reminders. Popup notifications are disabled by default.
 
 ### Health & Wellness Configuration
 
@@ -94,6 +113,46 @@ Dev Time Tracker is an extension that helps developers track their productivity 
 ```
 
 **Note:** All time intervals are specified in seconds. To convert to minutes, divide by 60 (e.g., 1200 seconds = 20 minutes).
+
+## Troubleshooting
+
+### Health Reminders Not Showing
+
+If health reminders are not appearing in the status bar:
+
+1. **Check Extension Logs**:
+   - Open the Command Palette (Ctrl+Shift+P or Cmd+Shift+P)
+   - Run "Developer: Open Extension Logs"
+   - Look for errors related to HealthService or HealthStatusBar
+
+2. **Verify Configuration**:
+   - Ensure health reminders are enabled in settings:
+     ```json
+     "devtimetracker.health.breakReminderEnabled": true,
+     "devtimetracker.health.postureReminderEnabled": true,
+     "devtimetracker.health.eyeStrainEnabled": true
+     ```
+
+3. **Check Status Bar Space**:
+   - The status bar has limited space
+   - Try collapsing other status bar items
+   - Check if reminders appear when you click the status bar area
+
+### Backend Connection Issues
+
+If you experience issues with the backend connection:
+
+1. **Verify API Configuration**:
+   - Check that `devtimetracker.apiUrl` is correctly set
+   - Ensure your API token in `devtimetracker.apiToken` is valid
+
+2. **Check Network Connectivity**:
+   - Verify you can access the API URL from your machine
+   - Check for any firewall or proxy issues
+
+3. **Inspect Console Logs**:
+   - Open Developer Tools (Help > Toggle Developer Tools)
+   - Check the Console tab for network or authentication errors
 
 ## Usage
 
