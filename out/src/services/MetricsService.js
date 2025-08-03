@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetricsService = void 0;
 const vscode = __importStar(require("vscode"));
-const axios_1 = require("axios");
 const ExtendedMetricsCollector_1 = require("../models/ExtendedMetricsCollector");
 const Metrics_1 = require("../models/Metrics");
 class MetricsService {
@@ -112,6 +111,27 @@ class MetricsService {
         this.loadConfig();
         this.setupEventListeners();
         this.startSyncInterval();
+    }
+    /**
+     * Updates the rate limit counter and checks if we're currently rate limited
+     * @private
+     */
+    updateRateLimitCounter() {
+        const now = Date.now();
+        // Remove timestamps older than the rate limit window
+        this.requestTimestamps = this.requestTimestamps.filter(timestamp => now - timestamp < MetricsService.RATE_LIMIT_WINDOW_MS);
+        // Check if we've exceeded the rate limit
+        if (this.requestTimestamps.length >= MetricsService.RATE_LIMIT_MAX_REQUESTS) {
+            this.isRateLimited = true;
+            // Set the reset time to the oldest timestamp + window duration
+            const oldestTimestamp = Math.min(...this.requestTimestamps);
+            this.rateLimitResetTime = oldestTimestamp + MetricsService.RATE_LIMIT_WINDOW_MS;
+            console.log(`[Metrics] Rate limited. Resets at ${new Date(this.rateLimitResetTime).toISOString()}`);
+        }
+        else {
+            // Add current timestamp to the request history
+            this.requestTimestamps.push(now);
+        }
     }
     getDefaultCodeMetrics() {
         return {
@@ -192,7 +212,15 @@ class MetricsService {
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error during sync';
             console.error('[Metrics] Force sync failed:', error);
-            vscode.window.showErrorMessage(`Failed to sync metrics: ${errorMessage}`, { modal: false });
+            // Show error in status bar instead of popup
+            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+            statusBarItem.text = '$(error) Failed to sync metrics';
+            statusBarItem.tooltip = errorMessage;
+            statusBarItem.show();
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                statusBarItem.dispose();
+            }, 5000);
             return {
                 success: false,
                 error: errorMessage
@@ -309,79 +337,41 @@ class MetricsService {
                 this.consecutiveFailures = 0;
                 this.lastSyncError = null;
                 this.lastSyncTime = new Date();
-                console.log(`[Metrics] Successfully synced batch of ${batch.length} events`);
+                console.log('[Metrics] Successfully synced with backend');
                 // Show success notification only for forced syncs or after failures
                 if (force || attempt > 1) {
-                    vscode.window.showInformationMessage(`Synced ${batch.length} metrics to server`, { modal: false });
+                    // Show sync success in status bar
+                    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+                    statusBarItem.text = '$(check) Metrics synced';
+                    statusBarItem.show();
+                    // Auto-hide after 3 seconds
+                    setTimeout(() => {
+                        statusBarItem.dispose();
+                    }, 3000);
                 }
                 break;
             }
             catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
-                const errorMessage = lastError.message;
-                // Check for rate limit headers if available
-                if ((0, axios_1.isAxiosError)(error) && error.response) {
-                    if (error.response.headers?.['x-ratelimit-remaining'] === '0') {
-                        const resetTime = parseInt(String(error.response.headers['x-ratelimit-reset'] || '0')) * 1000;
-                        this.handleRateLimit(resetTime);
-                    }
-                    else if (error.response.status === 429) {
-                        // Standard 429 Too Many Requests
-                        const retryAfter = parseInt(String(error.response.headers['retry-after'] || '60')) * 1000;
-                        this.handleRateLimit(Date.now() + retryAfter);
-                    }
-                }
-                console.error(`[Metrics] Batch sync attempt ${attempt} failed:`, errorMessage);
+                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+                console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
                 if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
                     // Wait before retry with exponential backoff
                     const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-                    console.log(`[Metrics] Retrying batch in ${delay}ms...`);
+                    console.log(`[Metrics] Retrying in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
+                }
+                else {
+                    // On final failure, update error state
+                    this.consecutiveFailures++;
+                    this.lastSyncError = {
+                        error: error instanceof Error ? error : new Error(String(error)),
+                        timestamp: Date.now()
+                    };
+                    return false;
                 }
             }
         }
-        if (!success && lastError) {
-            console.error('[Metrics] All batch sync attempts failed');
-            this.consecutiveFailures++;
-            this.lastSyncError = {
-                error: lastError,
-                timestamp: Date.now()
-            };
-            // Show error notification for first few failures
-            if (this.consecutiveFailures <= 3) {
-                vscode.window.showErrorMessage(`Failed to sync metrics: ${lastError.message}`, { modal: false });
-            }
-        }
         return success;
-    }
-    updateRateLimitCounter() {
-        const now = Date.now();
-        // Remove timestamps older than the rate limit window
-        this.requestTimestamps = this.requestTimestamps.filter(timestamp => now - timestamp < MetricsService.RATE_LIMIT_WINDOW_MS);
-        // Check if we've exceeded the rate limit
-        if (this.requestTimestamps.length >= MetricsService.RATE_LIMIT_MAX_REQUESTS) {
-            const oldestRequest = this.requestTimestamps[0];
-            const timeUntilReset = (oldestRequest + MetricsService.RATE_LIMIT_WINDOW_MS) - now;
-            this.handleRateLimit(now + timeUntilReset);
-            return;
-        }
-        // Add current request timestamp
-        this.requestTimestamps.push(now);
-    }
-    handleRateLimit(resetTime) {
-        this.isRateLimited = true;
-        this.rateLimitResetTime = resetTime;
-        const remainingMs = resetTime - Date.now();
-        console.warn(`[Metrics] Rate limited - resuming at ${new Date(resetTime).toISOString()}`);
-        // Show a warning to the user if we're significantly rate limited
-        if (remainingMs > 30000) { // Only show for rate limits > 30 seconds
-            vscode.window.showWarningMessage(`Metrics sync rate limited. Will resume in ${Math.ceil(remainingMs / 1000)} seconds.`, { modal: false });
-        }
-        // Schedule a retry after the rate limit resets
-        setTimeout(() => {
-            this.isRateLimited = false;
-            this.syncWithBackend().catch(console.error);
-        }, remainingMs + 1000);
     }
     async syncWithBackend(force = false) {
         // Skip if already syncing
@@ -455,7 +445,15 @@ class MetricsService {
                 const message = this.isRateLimited
                     ? 'Metrics sync rate limited. Will retry automatically.'
                     : `Failed to sync metrics: ${errorMessage}`;
-                vscode.window.showErrorMessage(message, { modal: false });
+                // Show error in status bar
+                const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+                statusBarItem.text = '$(error) Sync error';
+                statusBarItem.tooltip = message;
+                statusBarItem.show();
+                // Auto-hide after 5 seconds
+                setTimeout(() => {
+                    statusBarItem.dispose();
+                }, 5000);
             }
             // Schedule a retry with exponential backoff if not rate limited
             if (!this.isRateLimited) {
@@ -507,7 +505,14 @@ class MetricsService {
                     console.log('[Metrics] Successfully synced with backend');
                     // Show success notification only for forced syncs or after failures
                     if (force || attempt > 1) {
-                        vscode.window.showInformationMessage('Metrics synced successfully', { modal: false });
+                        // Show sync success in status bar
+                        const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+                        statusBarItem.text = '$(check) Metrics synced';
+                        statusBarItem.show();
+                        // Auto-hide after 3 seconds
+                        setTimeout(() => {
+                            statusBarItem.dispose();
+                        }, 3000);
                     }
                     break;
                 }
@@ -536,11 +541,16 @@ class MetricsService {
             console.error('[Metrics] All sync attempts failed:', error);
             // Only show error notification for forced syncs or first few failures
             if (force || this.consecutiveFailures <= 3) {
-                vscode.window.showErrorMessage(`Failed to sync metrics: ${errorMessage}`, 'Retry Now', 'Dismiss').then(selection => {
-                    if (selection === 'Retry Now') {
-                        this.forceSync();
-                    }
-                });
+                // Show error in status bar with retry option
+                const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
+                statusBarItem.text = '$(error) Sync failed - Click to retry';
+                statusBarItem.tooltip = errorMessage;
+                statusBarItem.command = 'devtimetracker.forceSync';
+                statusBarItem.show();
+                // Auto-hide after 10 seconds
+                setTimeout(() => {
+                    statusBarItem.dispose();
+                }, 10000);
             }
             throw error; // Re-throw to be caught by forceSync if needed
         }
