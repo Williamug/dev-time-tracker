@@ -46,7 +46,7 @@ export class HealthService {
 
   private constructor(backendService?: BackendService, context?: vscode.ExtensionContext) {
     this.context = context;
-    
+
     // Initialize timestamps
     const now = Date.now();
     this.lastBreakTime = now;
@@ -58,11 +58,6 @@ export class HealthService {
     // Initialize status bar
     this.healthStatusBar = HealthStatusBar.getInstance();
     console.log('[HealthService] HealthStatusBar initialized');
-    
-    // Force show all status bar items for testing
-    this.healthStatusBar.showBreakReminder(1);
-    this.healthStatusBar.showPostureReminder(1);
-    this.healthStatusBar.showEyeStrainReminder(1);
 
     // Load configuration and initialize
     this.loadConfig();
@@ -90,61 +85,57 @@ export class HealthService {
     try {
       const config = vscode.workspace.getConfiguration('devtimetracker.health');
       console.log('[HealthService] Loading configuration');
-      
-      // Break reminder settings
-      this.breakReminderInterval = config.get<number>('breakReminderInterval') ?? 1;
+
+      // Break reminder settings (convert seconds to minutes)
+      this.breakReminderInterval = Math.floor((config.get<number>('breakReminderInterval') ?? 3600) / 60);
       this.breakReminderEnabled = config.get<boolean>('breakReminderEnabled') ?? true;
-      this.breakSnoozeDuration = config.get<number>('breakSnoozeDuration') ?? 5;
+      this.breakSnoozeDuration = Math.floor((config.get<number>('breakSnoozeDuration') ?? 900) / 60);
       this.breakNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('breakNotificationType') ?? 'none';
       this.breakEnableSound = config.get<boolean>('breakEnableSound') ?? false;
-      
-      // Posture reminder settings
-      this.postureReminderInterval = config.get<number>('postureReminderInterval') ?? 1;
+
+      // Posture reminder settings (convert seconds to minutes)
+      this.postureReminderInterval = Math.floor((config.get<number>('postureReminderInterval') ?? 1800) / 60);
       this.postureReminderEnabled = config.get<boolean>('postureReminderEnabled') ?? true;
-      this.postureSnoozeDuration = config.get<number>('postureSnoozeDuration') ?? 5;
+      this.postureSnoozeDuration = Math.floor((config.get<number>('postureSnoozeDuration') ?? 900) / 60);
       this.postureNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('postureNotificationType') ?? 'none';
       this.postureEnableSound = config.get<boolean>('postureEnableSound') ?? false;
-      
-      // Eye strain reminder settings
-      this.eyeStrainInterval = config.get<number>('eyeStrainInterval') ?? 1;
-      this.eyeStrainEnabled = config.get<boolean>('eyeStrainEnabled') ?? true;
-      this.eyeStrainSnoozeDuration = config.get<number>('eyeStrainSnoozeDuration') ?? 5;
+
+      // Eye strain reminder settings (convert seconds to minutes)
+      this.eyeStrainInterval = Math.floor((config.get<number>('eyeStrainReminderInterval') ?? 1200) / 60);
+      this.eyeStrainEnabled = config.get<boolean>('eyeStrainReminderEnabled') ?? true;
+      this.eyeStrainSnoozeDuration = Math.floor((config.get<number>('eyeStrainSnoozeDuration') ?? 600) / 60);
       this.eyeStrainNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('eyeStrainNotificationType') ?? 'none';
-      this.eyeStrainEnableSound = config.get<boolean>('eyeStrainEnableSound') ?? false;
-      
-    } catch (error) {
+      this.eyeStrainEnableSound = config.get<boolean>('eyeStrainEnableSound') ?? false;    } catch (error) {
       console.error('[HealthService] Error loading configuration:', error);
       this.setDefaultConfig();
     }
   }
 
   private setDefaultConfig(): void {
-    // Break reminder defaults
-    this.breakReminderInterval = 1;
+    // Break reminder defaults (in minutes)
+    this.breakReminderInterval = 60; // 60 minutes (3600 seconds)
     this.breakReminderEnabled = true;
-    this.breakSnoozeDuration = 5;
+    this.breakSnoozeDuration = 15; // 15 minutes (900 seconds)
     this.breakNotificationType = 'none';
     this.breakEnableSound = false;
     this.breakSnoozedUntil = 0;
-    
-    // Posture reminder defaults
-    this.postureReminderInterval = 1;
+
+    // Posture reminder defaults (in minutes)
+    this.postureReminderInterval = 30; // 30 minutes (1800 seconds)
     this.postureReminderEnabled = true;
-    this.postureSnoozeDuration = 5;
+    this.postureSnoozeDuration = 15; // 15 minutes (900 seconds)
     this.postureNotificationType = 'none';
     this.postureEnableSound = false;
     this.postureSnoozedUntil = 0;
-    
-    // Eye strain defaults
-    this.eyeStrainInterval = 1;
+
+    // Eye strain defaults (in minutes)
+    this.eyeStrainInterval = 20; // 20 minutes (1200 seconds)
     this.eyeStrainEnabled = true;
-    this.eyeStrainSnoozeDuration = 5;
+    this.eyeStrainSnoozeDuration = 10; // 10 minutes (600 seconds)
     this.eyeStrainNotificationType = 'none';
     this.eyeStrainEnableSound = false;
     this.eyeStrainSnoozedUntil = 0;
-  }
-
-  private setupEventListeners(): void {
+  }  private setupEventListeners(): void {
     // Window focus change
     this.disposables.push(
       vscode.window.onDidChangeWindowState(state => {
@@ -161,7 +152,23 @@ export class HealthService {
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('devtimetracker.health')) {
+          const wasBreakEnabled = this.breakReminderEnabled;
+          const wasPostureEnabled = this.postureReminderEnabled;
+          const wasEyeStrainEnabled = this.eyeStrainEnabled;
+
           this.loadConfig();
+
+          // Clear status bar items if reminders were disabled
+          if (wasBreakEnabled && !this.breakReminderEnabled) {
+            this.healthStatusBar.clearBreakReminder();
+          }
+          if (wasPostureEnabled && !this.postureReminderEnabled) {
+            this.healthStatusBar.clearPostureReminder();
+          }
+          if (wasEyeStrainEnabled && !this.eyeStrainEnabled) {
+            this.healthStatusBar.clearEyeStrainReminder();
+          }
+
           this.restartTimers();
         }
       })
@@ -170,32 +177,32 @@ export class HealthService {
 
   private startTimers(): void {
     this.clearTimers();
-    
+
     // Start break reminder timer if enabled
     if (this.breakReminderEnabled) {
       console.log('[HealthService] Starting break reminder timer');
-      const breakTimer = setInterval(() => this.checkBreakReminder(), 1000); // 1 second for testing
+      const breakTimer = setInterval(() => this.checkBreakReminder(), 60000); // Check every minute
       this.timers.push(breakTimer);
-      // Show initial reminder
-      this.healthStatusBar.showBreakReminder(1);
+    } else {
+      this.healthStatusBar.clearBreakReminder();
     }
 
     // Start posture reminder timer if enabled
     if (this.postureReminderEnabled) {
       console.log('[HealthService] Starting posture reminder timer');
-      const postureTimer = setInterval(() => this.checkPostureReminder(), 1000); // 1 second for testing
+      const postureTimer = setInterval(() => this.checkPostureReminder(), 60000); // Check every minute
       this.timers.push(postureTimer);
-      // Show initial reminder
-      this.healthStatusBar.showPostureReminder(1);
+    } else {
+      this.healthStatusBar.clearPostureReminder();
     }
 
     // Start eye strain timer if enabled
     if (this.eyeStrainEnabled) {
       console.log('[HealthService] Starting eye strain reminder timer');
-      const eyeStrainTimer = setInterval(() => this.checkEyeStrainReminder(), 1000); // 1 second for testing
+      const eyeStrainTimer = setInterval(() => this.checkEyeStrainReminder(), 60000); // Check every minute
       this.timers.push(eyeStrainTimer);
-      // Show initial reminder
-      this.healthStatusBar.showEyeStrainReminder(1);
+    } else {
+      this.healthStatusBar.clearEyeStrainReminder();
     }
   }
 
@@ -209,63 +216,165 @@ export class HealthService {
   }
 
   private async checkBreakReminder(): Promise<void> {
+    if (!this.breakReminderEnabled) {
+      return;
+    }
+
     const now = Date.now();
-    if (now > this.lastBreakTime + this.breakReminderInterval * 60000) {
+
+    // Check if snoozed
+    if (this.breakSnoozedUntil > 0 && now < this.breakSnoozedUntil) {
+      const minutesRemaining = Math.ceil((this.breakSnoozedUntil - now) / 60000);
+      this.healthStatusBar.updateBreakReminder(minutesRemaining);
+      return;
+    }
+
+    // Reset snooze if expired
+    if (this.breakSnoozedUntil > 0 && now >= this.breakSnoozedUntil) {
+      this.breakSnoozedUntil = 0;
+    }
+
+    const timeSinceLastBreak = now - this.lastBreakTime;
+    const intervalMs = this.breakReminderInterval * 60000;
+
+    if (timeSinceLastBreak >= intervalMs) {
       await this.showBreakReminder();
+    } else {
+      const minutesRemaining = Math.ceil((intervalMs - timeSinceLastBreak) / 60000);
+      this.healthStatusBar.updateBreakReminder(minutesRemaining);
     }
   }
 
   private async checkPostureReminder(): Promise<void> {
+    if (!this.postureReminderEnabled) {
+      return;
+    }
+
     const now = Date.now();
-    if (now > this.lastPostureCheck + this.postureReminderInterval * 60000) {
+
+    // Check if snoozed
+    if (this.postureSnoozedUntil > 0 && now < this.postureSnoozedUntil) {
+      const minutesRemaining = Math.ceil((this.postureSnoozedUntil - now) / 60000);
+      this.healthStatusBar.updatePostureReminder(minutesRemaining);
+      return;
+    }
+
+    // Reset snooze if expired
+    if (this.postureSnoozedUntil > 0 && now >= this.postureSnoozedUntil) {
+      this.postureSnoozedUntil = 0;
+    }
+
+    const timeSinceLastCheck = now - this.lastPostureCheck;
+    const intervalMs = this.postureReminderInterval * 60000;
+
+    if (timeSinceLastCheck >= intervalMs) {
       await this.showPostureReminder();
+    } else {
+      const minutesRemaining = Math.ceil((intervalMs - timeSinceLastCheck) / 60000);
+      this.healthStatusBar.updatePostureReminder(minutesRemaining);
     }
   }
 
   private async checkEyeStrainReminder(): Promise<void> {
+    if (!this.eyeStrainEnabled) {
+      return;
+    }
+
     const now = Date.now();
-    if (now > this.lastEyeStrainBreak + this.eyeStrainInterval * 60000) {
+
+    // Check if snoozed
+    if (this.eyeStrainSnoozedUntil > 0 && now < this.eyeStrainSnoozedUntil) {
+      const minutesRemaining = Math.ceil((this.eyeStrainSnoozedUntil - now) / 60000);
+      this.healthStatusBar.updateEyeStrainReminder(minutesRemaining);
+      return;
+    }
+
+    // Reset snooze if expired
+    if (this.eyeStrainSnoozedUntil > 0 && now >= this.eyeStrainSnoozedUntil) {
+      this.eyeStrainSnoozedUntil = 0;
+    }
+
+    const timeSinceLastBreak = now - this.lastEyeStrainBreak;
+    const intervalMs = this.eyeStrainInterval * 60000;
+
+    if (timeSinceLastBreak >= intervalMs) {
       await this.showEyeStrainReminder();
+    } else {
+      const minutesRemaining = Math.ceil((intervalMs - timeSinceLastBreak) / 60000);
+      this.healthStatusBar.updateEyeStrainReminder(minutesRemaining);
     }
   }
 
   private async showBreakReminder(): Promise<void> {
+    const now = Date.now();
+    this.healthStatusBar.showBreakReminder(0); // Show active reminder in status bar
+
     if (this.breakNotificationType !== 'none') {
-      const message = 'Time to take a break!';
+      const message = '⏰ Time to take a break! You\'ve been coding for a while.';
       await this.showNotification(message, 'break');
     }
-    this.lastBreakTime = Date.now();
+
+    this.lastBreakTime = now;
   }
 
   private async showPostureReminder(): Promise<void> {
+    const now = Date.now();
+    this.healthStatusBar.showPostureReminder(0); // Show active reminder in status bar
+
     if (this.postureNotificationType !== 'none') {
-      const message = 'Check your posture!';
+      const message = '🧍 Check your posture! Sit up straight and adjust your position.';
       await this.showNotification(message, 'posture');
     }
-    this.lastPostureCheck = Date.now();
+
+    this.lastPostureCheck = now;
   }
 
   private async showEyeStrainReminder(): Promise<void> {
+    const now = Date.now();
+    this.healthStatusBar.showEyeStrainReminder(0); // Show active reminder in status bar
+
     if (this.eyeStrainNotificationType !== 'none') {
-      const message = 'Time to rest your eyes!';
+      const message = '👁️ Time to rest your eyes! Look at something 20 feet away for 20 seconds.';
       await this.showNotification(message, 'eyeStrain');
     }
-    this.lastEyeStrainBreak = Date.now();
+
+    this.lastEyeStrainBreak = now;
   }
 
   private async showNotification(message: string, type: 'break' | 'posture' | 'eyeStrain'): Promise<void> {
-    const snoozeMinutes = type === 'break' ? this.breakSnoozeDuration : 
-                         type === 'posture' ? this.postureSnoozeDuration : 
+    const snoozeMinutes = type === 'break' ? this.breakSnoozeDuration :
+                         type === 'posture' ? this.postureSnoozeDuration :
                          this.eyeStrainSnoozeDuration;
-    
+
     const snoozeLabel = `Snooze (${snoozeMinutes}m)`;
     const selection = await vscode.window.showInformationMessage(message, snoozeLabel, 'Dismiss');
-    
+
     if (selection === snoozeLabel) {
       const snoozeTime = Date.now() + (snoozeMinutes * 60000);
-      if (type === 'break') this.breakSnoozedUntil = snoozeTime;
-      else if (type === 'posture') this.postureSnoozedUntil = snoozeTime;
-      else this.eyeStrainSnoozedUntil = snoozeTime;
+      if (type === 'break') {
+        this.breakSnoozedUntil = snoozeTime;
+        this.healthStatusBar.updateBreakReminder(snoozeMinutes);
+      } else if (type === 'posture') {
+        this.postureSnoozedUntil = snoozeTime;
+        this.healthStatusBar.updatePostureReminder(snoozeMinutes);
+      } else {
+        this.eyeStrainSnoozedUntil = snoozeTime;
+        this.healthStatusBar.updateEyeStrainReminder(snoozeMinutes);
+      }
+      console.log(`[HealthService] ${type} snoozed for ${snoozeMinutes} minutes`);
+    } else if (selection === 'Dismiss') {
+      // Update status bar to show next reminder time
+      if (type === 'break') {
+        const minutesUntilNext = this.breakReminderInterval;
+        this.healthStatusBar.updateBreakReminder(minutesUntilNext);
+      } else if (type === 'posture') {
+        const minutesUntilNext = this.postureReminderInterval;
+        this.healthStatusBar.updatePostureReminder(minutesUntilNext);
+      } else {
+        const minutesUntilNext = this.eyeStrainInterval;
+        this.healthStatusBar.updateEyeStrainReminder(minutesUntilNext);
+      }
+      console.log(`[HealthService] ${type} reminder dismissed`);
     }
   }
 
