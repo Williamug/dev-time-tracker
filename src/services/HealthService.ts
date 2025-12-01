@@ -310,7 +310,8 @@ export class HealthService {
     this.healthStatusBar.showBreakReminder(0); // Show active reminder in status bar
 
     if (this.breakNotificationType !== 'none') {
-      const message = '⏰ Time to take a break! You\'ve been coding for a while.';
+      const intervalMinutes = this.breakReminderInterval;
+      const message = `⏰ Time for a break! You've been coding for ${intervalMinutes} minutes. Stand up, stretch, and rest your eyes.`;
       await this.showNotification(message, 'break');
     }
 
@@ -322,7 +323,7 @@ export class HealthService {
     this.healthStatusBar.showPostureReminder(0); // Show active reminder in status bar
 
     if (this.postureNotificationType !== 'none') {
-      const message = '🧍 Check your posture! Sit up straight and adjust your position.';
+      const message = '🧍 Posture check! Sit up straight, adjust your chair height, and keep your feet flat on the floor.';
       await this.showNotification(message, 'posture');
     }
 
@@ -334,7 +335,7 @@ export class HealthService {
     this.healthStatusBar.showEyeStrainReminder(0); // Show active reminder in status bar
 
     if (this.eyeStrainNotificationType !== 'none') {
-      const message = '👁️ Time to rest your eyes! Look at something 20 feet away for 20 seconds.';
+      const message = '👁️ Eye break time! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
       await this.showNotification(message, 'eyeStrain');
     }
 
@@ -346,36 +347,76 @@ export class HealthService {
                          type === 'posture' ? this.postureSnoozeDuration :
                          this.eyeStrainSnoozeDuration;
 
-    const snoozeLabel = `Snooze (${snoozeMinutes}m)`;
-    const selection = await vscode.window.showInformationMessage(message, snoozeLabel, 'Dismiss');
+    // Show a non-blocking notification in the bottom right
+    const snoozeLabel = `$(clock) Snooze for ${snoozeMinutes} minutes`;
+    const dismissLabel = `$(check) Got it!`;
+    const disableLabel = `$(x) Disable ${type === 'break' ? 'break' : type === 'posture' ? 'posture' : 'eye strain'} reminders`;
+    
+    // Use showInformationMessage but don't await it - this is less intrusive
+    vscode.window.showInformationMessage(
+      message,
+      { modal: false }, // Non-blocking
+      snoozeLabel,
+      dismissLabel,
+      disableLabel
+    ).then(selection => {
+      if (selection === snoozeLabel) {
+        const snoozeTime = Date.now() + (snoozeMinutes * 60000);
+        if (type === 'break') {
+          this.breakSnoozedUntil = snoozeTime;
+          this.healthStatusBar.updateBreakReminder(snoozeMinutes);
+        } else if (type === 'posture') {
+          this.postureSnoozedUntil = snoozeTime;
+          this.healthStatusBar.updatePostureReminder(snoozeMinutes);
+        } else {
+          this.eyeStrainSnoozedUntil = snoozeTime;
+          this.healthStatusBar.updateEyeStrainReminder(snoozeMinutes);
+        }
+        vscode.window.showInformationMessage(`${this.getReminderTypeLabel(type)} snoozed for ${snoozeMinutes} minutes`);
+        console.log(`[HealthService] ${type} snoozed for ${snoozeMinutes} minutes`);
+      } else if (selection === dismissLabel) {
+        // Update status bar to show next reminder time
+        if (type === 'break') {
+          const minutesUntilNext = this.breakReminderInterval;
+          this.healthStatusBar.updateBreakReminder(minutesUntilNext);
+        } else if (type === 'posture') {
+          const minutesUntilNext = this.postureReminderInterval;
+          this.healthStatusBar.updatePostureReminder(minutesUntilNext);
+        } else {
+          const minutesUntilNext = this.eyeStrainInterval;
+          this.healthStatusBar.updateEyeStrainReminder(minutesUntilNext);
+        }
+        console.log(`[HealthService] ${type} reminder dismissed`);
+      } else if (selection === disableLabel) {
+        // Disable the reminder type
+        this.disableReminder(type);
+      }
+    });
+  }
 
-    if (selection === snoozeLabel) {
-      const snoozeTime = Date.now() + (snoozeMinutes * 60000);
-      if (type === 'break') {
-        this.breakSnoozedUntil = snoozeTime;
-        this.healthStatusBar.updateBreakReminder(snoozeMinutes);
-      } else if (type === 'posture') {
-        this.postureSnoozedUntil = snoozeTime;
-        this.healthStatusBar.updatePostureReminder(snoozeMinutes);
-      } else {
-        this.eyeStrainSnoozedUntil = snoozeTime;
-        this.healthStatusBar.updateEyeStrainReminder(snoozeMinutes);
-      }
-      console.log(`[HealthService] ${type} snoozed for ${snoozeMinutes} minutes`);
-    } else if (selection === 'Dismiss') {
-      // Update status bar to show next reminder time
-      if (type === 'break') {
-        const minutesUntilNext = this.breakReminderInterval;
-        this.healthStatusBar.updateBreakReminder(minutesUntilNext);
-      } else if (type === 'posture') {
-        const minutesUntilNext = this.postureReminderInterval;
-        this.healthStatusBar.updatePostureReminder(minutesUntilNext);
-      } else {
-        const minutesUntilNext = this.eyeStrainInterval;
-        this.healthStatusBar.updateEyeStrainReminder(minutesUntilNext);
-      }
-      console.log(`[HealthService] ${type} reminder dismissed`);
+  private getReminderTypeLabel(type: 'break' | 'posture' | 'eyeStrain'): string {
+    switch (type) {
+      case 'break': return 'Break reminder';
+      case 'posture': return 'Posture reminder';
+      case 'eyeStrain': return 'Eye strain reminder';
     }
+  }
+
+  private async disableReminder(type: 'break' | 'posture' | 'eyeStrain'): Promise<void> {
+    const config = vscode.workspace.getConfiguration('devtimetracker.health');
+    const key = type === 'break' ? 'breakReminderEnabled' :
+                type === 'posture' ? 'postureReminderEnabled' :
+                'eyeStrainReminderEnabled';
+    
+    await config.update(key, false, vscode.ConfigurationTarget.Global);
+    vscode.window.showInformationMessage(
+      `${this.getReminderTypeLabel(type)} disabled. You can re-enable it in settings.`,
+      'Open Settings'
+    ).then(selection => {
+      if (selection === 'Open Settings') {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker.health');
+      }
+    });
   }
 
   public dispose(): void {

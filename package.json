@@ -127,7 +127,7 @@
         "devtimetracker.health": {
           "type": "object",
           "title": "Health Reminders",
-          "description": "Health reminders will appear in the status bar. They are non-intrusive and won't interrupt your workflow.",
+          "description": "Health reminders appear as non-blocking notifications in the bottom right corner. They won't disrupt your workflow or split your editor.",
           "properties": {
             "breakReminderEnabled": {
               "type": "boolean",
