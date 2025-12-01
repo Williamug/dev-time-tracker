@@ -18,11 +18,23 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
   - `breakSnoozeDuration`: Default 15 minutes (900 seconds)
   - `postureSnoozeDuration`: Default 15 minutes (900 seconds)
   - `eyeStrainSnoozeDuration`: Default 10 minutes (600 seconds)
+- **UX Issue**: Changed intrusive modal notifications to non-blocking notifications
+  - Notifications now appear in bottom-right corner instead of modal dialogs
+  - No longer splits or disrupts the editor layout
+  - Users can continue working while notification is displayed
 
 ### Changed
-- Improved reminder messages with better emoji and clearer instructions
+- **Notification System**: Redesigned health reminder notifications to be non-disruptive
+  - Changed from blocking modal (`modal: true`) to non-blocking notifications
+  - Added quick action buttons with icons for better UX
+  - Added "Disable reminder" option directly in notification
+  - Improved reminder messages with detailed, helpful instructions
 - Configuration change handler now properly clears status bar items when reminders are disabled
 - Better logging for debugging health reminder states
+
+### Added
+- Option to disable specific reminder types directly from the notification
+- Quick link to open settings when disabling reminders
 
 ## [1.5.0] - 2025-11-30
 
