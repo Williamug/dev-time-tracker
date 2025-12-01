@@ -69,7 +69,7 @@ To enable backend integration, add these settings to your VS Code settings (JSON
 "devtimetracker.notifications.position": "statusBar"
 ```
 
-> **Note:** The notification system now primarily uses the status bar for non-intrusive reminders. Popup notifications are disabled by default.
+> **Note:** Health reminders appear as non-blocking notifications in the bottom-right corner. They won't interrupt your workflow or split your editor. You can snooze, dismiss, or disable them directly from the notification.
 
 ### Health & Wellness Configuration
 
