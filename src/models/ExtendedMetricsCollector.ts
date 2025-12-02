@@ -61,25 +61,25 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
     timestamp: number;
   }): void {
     if (!this.initialized) return;
-    
+
     const metrics = this.getMetrics();
     const fileExtension = filePath.split('.').pop() || '';
-    
+
     // Initialize metrics if needed
     if (!metrics.code) {
       metrics.code = this.getInitialCodeMetrics();
     }
-    
+
     // Update file type metrics
     if (fileExtension && metrics.code) {
       metrics.code.fileTypes[fileExtension] = (metrics.code.fileTypes[fileExtension] || 0) + 1;
       metrics.code.files.modified = (metrics.code.files.modified || 0) + 1;
-      
+
       // Update line counts
       metrics.code.lines = metrics.code.lines || { added: 0, removed: 0, total: 0 };
       metrics.code.lines.added = (metrics.code.lines.added || 0) + data.changes;
       metrics.code.lines.total = (metrics.code.lines.total || 0) + data.changes;
-      
+
       this.updateMetrics(metrics);
     }
   }
@@ -94,11 +94,11 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
     const metrics = this.getMetrics();
     const workspaceFolder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(filePath));
     const projectName = workspaceFolder?.name || 'Unknown';
-    
+
     if (!metrics.project) {
       metrics.project = this.getInitialProjectMetrics();
     }
-    
+
     // Initialize project if it doesn't exist
     if (!metrics.project.projects[projectName]) {
       metrics.project.projects[projectName] = {
@@ -107,22 +107,22 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
         fileTypes: {}
       };
     }
-    
+
     // Update project metrics
     const project = metrics.project.projects[projectName];
     project.lastActive = new Date();
     project.fileTypes[data.language] = (project.fileTypes[data.language] || 0) + 1;
-    
+
     this.updateMetrics(metrics);
   }
 
   public recordFileOperation(operation: 'create' | 'delete' | 'rename', filePath: string, oldPath?: string) {
     const metrics = this.getMetrics();
-    
+
     if (!metrics.code) {
       metrics.code = this.getInitialCodeMetrics();
     }
-    
+
     switch (operation) {
       case 'create':
         metrics.code.files.created = (metrics.code.files.created || 0) + 1;
@@ -136,7 +136,7 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
         metrics.code.files.created = (metrics.code.files.created || 0) + 1;
         break;
     }
-    
+
     this.updateMetrics(metrics);
   }
 
@@ -154,34 +154,47 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
     return this.baseCollector.getMetrics();
   }
 
-  public recordChange(filePath: string, data: { 
-    language: string; 
-    changes: number; 
-    timestamp: number 
+  public recordChange(filePath: string, data: {
+    language: string;
+    changes: number;
+    linesAdded?: number;
+    linesRemoved?: number;
+    timestamp: number
   }): void {
     if (!this.initialized) return;
-    
+
     const metrics = this.getMetrics();
     const fileExtension = filePath.split('.').pop() || '';
-    
+
     // Initialize metrics if needed
     if (!metrics.code) {
       metrics.code = this.getInitialCodeMetrics();
     }
-    
+
     // Update file type metrics
     if (fileExtension && metrics.code) {
       metrics.code.fileTypes = metrics.code.fileTypes || {};
-      metrics.code.fileTypes[fileExtension] = (metrics.code.fileTypes[fileExtension] || 0) + 1;
-      
-      // Initialize files if needed
+      // Track unique file types, not increment per change
+      if (!metrics.code.fileTypes[fileExtension]) {
+        metrics.code.fileTypes[fileExtension] = 1;
+      }
+
+      // Initialize files and lines if needed
       if (!metrics.code.files) {
         metrics.code.files = { modified: 0, created: 0, deleted: 0 };
       }
-      
-      // Update modified files count
-      metrics.code.files.modified = (metrics.code.files.modified || 0) + 1;
-      
+      if (!metrics.code.lines) {
+        metrics.code.lines = { added: 0, removed: 0, total: 0 };
+      }
+
+      // Track line changes with actual counts
+      const linesAdded = data.linesAdded || 0;
+      const linesRemoved = data.linesRemoved || 0;
+
+      metrics.code.lines.added = (metrics.code.lines.added || 0) + linesAdded;
+      metrics.code.lines.removed = (metrics.code.lines.removed || 0) + linesRemoved;
+      metrics.code.lines.total = (metrics.code.lines.total || 0) + linesAdded + linesRemoved;
+
       this.updateMetrics(metrics);
     }
   }
@@ -196,7 +209,7 @@ export class ExtendedMetricsCollector implements IMetricsCollector {
       quality: this.getInitialQualityMetrics(),
       timestamp: new Date()
     };
-    
+
     this.updateMetrics(initialMetrics);
   }
 

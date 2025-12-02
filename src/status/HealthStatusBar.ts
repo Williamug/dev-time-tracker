@@ -29,28 +29,28 @@ export class HealthStatusBar {
   private createStatusBarItem(type: ReminderType, priority: number): void {
     try {
       console.log(`[HealthStatusBar] Creating status bar item for ${type}`);
-      
+
       // Create the status bar item
       const item = vscode.window.createStatusBarItem(
         vscode.StatusBarAlignment.Left,
         priority * 1000 // Convert to proper priority range (0-1000)
       );
-      
+
       // Set default properties
-      const icon = type === 'break' ? '$(clock)' : 
+      const icon = type === 'break' ? '$(clock)' :
                   type === 'posture' ? '$(symbol-method)' : '$(eye)';
-      
+
       item.text = icon;
       item.tooltip = `Dev Time Tracker - ${this.getReminderLabel(type)}`;
       item.command = `devtimetracker.${type}Reminder`;
-      
+
       // Force show the item
       item.show();
       console.log(`[HealthStatusBar] Status bar item created for ${type}:`, item);
-      
+
       // Store the item
       this.statusBarItems.set(type, item);
-      
+
     } catch (error) {
       console.error(`[HealthStatusBar] Error creating status bar item for ${type}:`, error);
     }
@@ -111,8 +111,8 @@ export class HealthStatusBar {
   public showEyeStrainReminder(minutesUntilNext: number): void {
     this.updateReminder('eyeStrain', minutesUntilNext, {
       activeText: '$(eye) Rest your eyes!',
-      activeTooltip: 'Click to acknowledge eye strain reminder',
-      command: 'devtimetracker.acknowledgeEyeStrain',
+      activeTooltip: 'Click to start 20-20-20 timer',
+      command: 'devtimetracker.start202020Timer',
       color: 'statusBarItem.errorBackground'
     });
   }
@@ -137,7 +137,7 @@ export class HealthStatusBar {
   ): void {
     try {
       console.log(`[HealthStatusBar] Updating reminder for ${type}:`, { minutes, options });
-      
+
       // Clear any existing interval
       this.clearCountdown(type);
 

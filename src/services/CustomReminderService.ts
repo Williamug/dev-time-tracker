@@ -60,7 +60,7 @@ export class CustomReminderService {
 
   private async initialize(): Promise<void> {
     if (this.isInitialized) return;
-    
+
     try {
       await this.loadReminders();
       this.setupEventListeners();
@@ -142,7 +142,7 @@ export class CustomReminderService {
     if (this.checkInterval) {
       clearInterval(this.checkInterval);
     }
-    
+
     this.checkInterval = setInterval(async () => {
       try {
         await this.checkReminders();
@@ -161,7 +161,7 @@ export class CustomReminderService {
     const typingStats = this.metricsProvider.getTypingStats();
     const sessionDuration = this.metricsProvider.getCurrentSessionDuration();
     const language = this.metricsProvider.getActiveDocumentLanguage();
-    
+
     for (const [id, reminder] of this.reminders.entries()) {
       if (reminder.shouldTrigger(typingStats, language, sessionDuration)) {
         await this.showReminder(reminder, 'Reminder triggered');
@@ -170,19 +170,13 @@ export class CustomReminderService {
   }
 
   private async showReminder(reminder: CustomReminder, reason: string): Promise<void> {
-    // Don't show any popup notifications - just log to console
+    // Show simple toast notification without modal
+    vscode.window.showInformationMessage(`${reminder.title}: ${reminder.message}`);
     console.log(`[CustomReminder] ${reminder.title}: ${reminder.message} (${reason})`);
-    
-    // Show in status bar instead of popup
-    const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
-    statusBar.text = `$(bell) ${reminder.title}`;
-    statusBar.tooltip = `${reminder.message}\n\n${reason}`;
-    statusBar.show();
-    
-    // Auto-hide after 10 seconds
-    setTimeout(() => {
-      statusBar.dispose();
-    }, 10000);
+
+    // Update last triggered time
+    reminder.lastTriggered = Date.now();
+    await this.saveReminders();
   }
 
   private getNotificationType(type: NotificationType): 'info' | 'warning' | 'error' {

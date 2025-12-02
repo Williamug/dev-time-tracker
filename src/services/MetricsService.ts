@@ -22,7 +22,7 @@ export class MetricsService implements IMetricsProvider {
   private typingStats = { speed: 0, accuracy: 100 };
   private sessionStartTime = Date.now();
   private activeDocumentLanguage: string | undefined;
-  
+
   // IMetricsProvider implementation
   public getTypingStats() {
     return { ...this.typingStats };
@@ -49,27 +49,25 @@ export class MetricsService implements IMetricsProvider {
   private static readonly MAX_BATCH_SIZE = 100; // Maximum number of events per batch
   private static readonly RATE_LIMIT_WINDOW_MS = 60000; // 1 minute rate limit window
   private static readonly RATE_LIMIT_MAX_REQUESTS = 30; // Max requests per window
-  private static readonly IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes of inactivity
-  
+
   // Rate limiting state
   private requestTimestamps: number[] = [];
   private pendingMetrics: any[] = [];
   private lastSyncAttempt: number = 0;
   private isRateLimited: boolean = false;
   private rateLimitResetTime: number = 0;
-  
-  // Idle tracking
+
+  // Activity tracking - no idle timer, purely activity-based
   private lastActivityTime: number = Date.now();
-  private isIdle: boolean = false;
-  private idleTimer: NodeJS.Timeout | null = null;
-  private isTrackingPaused: boolean = false;
+  private isActive: boolean = false; // Only active during user interaction
+  private isWindowFocused: boolean = true;
 
   private constructor(backendService?: BackendService | null) {
     this.metrics = new Map();
     this.baseCollector = MetricsCollector.getInstance();
     this.metricsCollector = ExtendedMetricsCollector.getInstance(this.baseCollector);
     this.initialize();
-    
+
     // Track active document language
     this.activeDocumentLanguage = vscode.window.activeTextEditor?.document.languageId;
     this.disposables.push(
@@ -77,7 +75,7 @@ export class MetricsService implements IMetricsProvider {
         this.activeDocumentLanguage = editor?.document.languageId;
       })
     );
-    
+
     if (backendService) {
       this.backendService = backendService;
     }
@@ -85,10 +83,14 @@ export class MetricsService implements IMetricsProvider {
 
   public static getInstance(backendService?: BackendService | null): MetricsService {
     if (!MetricsService.instance) {
+      console.log('[MetricsService] Creating new instance, backendService:', backendService ? '✅ Provided' : '❌ Not provided');
       MetricsService.instance = new MetricsService(backendService);
     } else if (backendService) {
       // Update backend service reference if provided
+      console.log('[MetricsService] Updating existing instance with backendService');
       MetricsService.instance.backendService = backendService;
+    } else {
+      console.log('[MetricsService] Reusing existing instance, backendService:', MetricsService.instance.backendService ? '✅ Available' : '❌ Not available');
     }
     return MetricsService.instance;
   }
@@ -105,19 +107,19 @@ export class MetricsService implements IMetricsProvider {
    */
   private updateRateLimitCounter(): void {
     const now = Date.now();
-    
+
     // Remove timestamps older than the rate limit window
     this.requestTimestamps = this.requestTimestamps.filter(
       timestamp => now - timestamp < MetricsService.RATE_LIMIT_WINDOW_MS
     );
-    
+
     // Check if we've exceeded the rate limit
     if (this.requestTimestamps.length >= MetricsService.RATE_LIMIT_MAX_REQUESTS) {
       this.isRateLimited = true;
       // Set the reset time to the oldest timestamp + window duration
       const oldestTimestamp = Math.min(...this.requestTimestamps);
       this.rateLimitResetTime = oldestTimestamp + MetricsService.RATE_LIMIT_WINDOW_MS;
-      
+
       console.log(`[Metrics] Rate limited. Resets at ${new Date(this.rateLimitResetTime).toISOString()}`);
     } else {
       // Add current timestamp to the request history
@@ -138,7 +140,7 @@ export class MetricsService implements IMetricsProvider {
     const config = vscode.workspace.getConfiguration('devtimetracker');
     this.apiUrl = config.get<string>('apiUrl') || null;
     this.apiToken = config.get<string>('apiToken') || null;
-    
+
     // Listen for config changes
     vscode.workspace.onDidChangeConfiguration(e => {
       if (e.affectsConfiguration('devtimetracker')) {
@@ -148,27 +150,28 @@ export class MetricsService implements IMetricsProvider {
   }
 
   private setupEventListeners() {
-    // Document changes
+    // Document changes - mark active on typing
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument(e => {
-        this.handleActivity();
+        this.markActive();
         this.handleDocumentChange(e);
       })
     );
 
-    // Track user activity
+    // Track user activity - only these actions mark user as active
     this.disposables.push(
-      vscode.window.onDidChangeActiveTextEditor(() => this.handleActivity()),
-      vscode.window.onDidChangeTextEditorSelection(() => this.handleActivity()),
+      vscode.window.onDidChangeActiveTextEditor(() => this.markActive()),
+      vscode.window.onDidChangeTextEditorSelection(() => this.markActive()),
       vscode.window.onDidChangeWindowState(state => {
+        this.isWindowFocused = state.focused;
         if (state.focused) {
-          this.handleActivity();
+          this.markActive();
+        } else {
+          // Window lost focus - immediately mark inactive
+          this.markInactive();
         }
       })
     );
-
-    // Start idle checker
-    this.startIdleChecker();
 
     // File operations
     this.disposables.push(
@@ -222,7 +225,7 @@ export class MetricsService implements IMetricsProvider {
         clearTimeout(this.syncTimeout);
         this.syncTimeout = null;
       }
-      
+
       await this.syncWithBackend(true);
       return { success: true };
     } catch (error) {
@@ -233,23 +236,23 @@ export class MetricsService implements IMetricsProvider {
       statusBarItem.text = '$(error) Failed to sync metrics';
       statusBarItem.tooltip = errorMessage;
       statusBarItem.show();
-      
+
       // Auto-hide after 5 seconds
       setTimeout(() => {
         statusBarItem.dispose();
       }, 5000);
-      return { 
-        success: false, 
-        error: errorMessage 
+      return {
+        success: false,
+        error: errorMessage
       };
     }
   }
 
   private handleEditorChange(editor: vscode.TextEditor): void {
-    if (!editor || !this.metricsCollector) { 
-      return; 
+    if (!editor || !this.metricsCollector) {
+      return;
     }
-    
+
     try {
       const document = editor.document;
       const filePath = document.uri.fsPath;
@@ -273,26 +276,48 @@ export class MetricsService implements IMetricsProvider {
   // Handle document change events with batching support
   private handleDocumentChange(change: vscode.TextDocumentChangeEvent): void {
     if (!this.metricsCollector) return;
-    
+
     try {
       const document = change.document;
       const filePath = document.uri.fsPath;
       const languageId = document.languageId;
       const contentChanges = change.contentChanges;
-      
+
       // Skip if no actual changes
       if (contentChanges.length === 0) return;
-      
-      // Record the change
+
+      // Calculate actual lines added/removed
+      let totalLinesAdded = 0;
+      let totalLinesRemoved = 0;
+
+      for (const contentChange of contentChanges) {
+        const newLineCount = contentChange.text.split('\n').length - 1;
+        const oldLineCount = contentChange.range.end.line - contentChange.range.start.line;
+
+        if (newLineCount > oldLineCount) {
+          totalLinesAdded += (newLineCount - oldLineCount);
+        } else if (oldLineCount > newLineCount) {
+          totalLinesRemoved += (oldLineCount - newLineCount);
+        }
+
+        // Also count actual text changes (even on same line)
+        if (contentChange.text.length > 0 && newLineCount === oldLineCount) {
+          totalLinesAdded += 1; // Count modifications as additions
+        }
+      }
+
+      // Record the change with line counts
       this.metricsCollector.recordChange(filePath, {
         language: languageId,
-        changes: contentChanges.length,
+        changes: totalLinesAdded + totalLinesRemoved,
+        linesAdded: totalLinesAdded,
+        linesRemoved: totalLinesRemoved,
         timestamp: Date.now()
       });
 
       // Get current metrics without resetting
       const metrics = this.metricsCollector.peekMetrics();
-      
+
       // If we're approaching batch size, trigger a sync
       if (this.pendingMetrics.length + 1 >= MetricsService.MAX_BATCH_SIZE) {
         this.syncWithBackend().catch(error => {
@@ -304,7 +329,7 @@ export class MetricsService implements IMetricsProvider {
       }
     } catch (error) {
       console.error('Error handling document change:', error);
-      
+
       // Even if there's an error, try to schedule a sync to avoid losing data
       this.scheduleSync();
     }
@@ -312,46 +337,46 @@ export class MetricsService implements IMetricsProvider {
 
   private handleFilesCreated(files: readonly vscode.Uri[]): void {
     if (!this.metricsCollector) return;
-    
+
     files.forEach(file => {
       this.metricsCollector.recordFileOperation('create', file.fsPath);
     });
-    
+
     this.scheduleSync();
   }
 
   private handleFilesDeleted(files: readonly vscode.Uri[]): void {
     if (!this.metricsCollector) return;
-    
+
     files.forEach(file => {
       this.metricsCollector.recordFileOperation('delete', file.fsPath);
     });
-    
+
     this.scheduleSync();
   }
 
   private handleFilesRenamed(files: readonly { oldUri: vscode.Uri; newUri: vscode.Uri }[]): void {
     if (!this.metricsCollector) return;
-    
+
     files.forEach(({ oldUri, newUri }) => {
       this.metricsCollector.recordFileOperation('rename', newUri.fsPath, oldUri.fsPath);
     });
-    
+
     this.scheduleSync();
   }
 
   private async processBatch(force = false): Promise<boolean> {
     if (this.pendingMetrics.length === 0) return true;
-    
+
     const batch = [...this.pendingMetrics];
     let success = false;
     let lastError: Error | null = null;
-    
+
     console.log(`[Metrics] Processing batch of ${batch.length} metrics...`);
-    
+
     // Apply rate limiting
     this.updateRateLimitCounter();
-    
+
     // Send with retry logic
     for (let attempt = 1; attempt <= MetricsService.MAX_RETRY_ATTEMPTS; attempt++) {
       try {
@@ -363,36 +388,36 @@ export class MetricsService implements IMetricsProvider {
           }
           this.isRateLimited = false;
         }
-        
+
         await this.backendService!.sendEvent('metrics_batch', { events: batch });
-        
+
         // On success, remove processed metrics from pending
         this.pendingMetrics = this.pendingMetrics.filter(m => !batch.some(b => b.batchId === m.batchId));
-        
+
         success = true;
         this.consecutiveFailures = 0;
         this.lastSyncError = null;
         this.lastSyncTime = new Date();
         console.log('[Metrics] Successfully synced with backend');
-        
+
         // Show success notification only for forced syncs or after failures
         if (force || attempt > 1) {
           // Show sync success in status bar
           const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
           statusBarItem.text = '$(check) Metrics synced';
           statusBarItem.show();
-          
+
           // Auto-hide after 3 seconds
           setTimeout(() => {
             statusBarItem.dispose();
           }, 3000);
         }
         break;
-        
+
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
-        
+
         if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
           // Wait before retry with exponential backoff
           const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
@@ -409,7 +434,7 @@ export class MetricsService implements IMetricsProvider {
         }
       }
     }
-    
+
     return success;
   }
 
@@ -422,16 +447,19 @@ export class MetricsService implements IMetricsProvider {
 
     // Skip if no backend service
     if (!this.backendService) {
-      console.log('[Metrics] Backend service not available');
+      console.log('[Metrics] ⚠️  Backend service not available - cannot sync metrics');
+      console.log('[Metrics] Metrics will be collected locally but not sent to backend');
       return;
     }
+
+    console.log('[Metrics] 📤 Starting sync to backend, pending metrics:', this.pendingMetrics.length);
 
     // Check rate limiting
     if (this.isRateLimited) {
       if (Date.now() < this.rateLimitResetTime) {
         const remainingMs = this.rateLimitResetTime - Date.now();
         console.log(`[Metrics] Rate limited - waiting ${remainingMs}ms before next request`);
-        
+
         // Schedule a retry after rate limit resets
         setTimeout(() => this.syncWithBackend(force), remainingMs + 1000);
         return;
@@ -446,19 +474,19 @@ export class MetricsService implements IMetricsProvider {
       return;
     }
     this.lastSyncAttempt = now;
-    
+
     try {
       this.isSyncing = true;
-      
+
       // Get current metrics and reset the collector
       const metrics = this.metricsCollector.getMetrics();
-      
+
       // Skip if no meaningful data to sync (unless forced)
       if (!this.hasMeaningfulData(metrics) && !force) {
         console.log('[Metrics] No meaningful data to sync');
         return;
       }
-      
+
       // Create a batch item with metadata
       const batchItem = {
         ...metrics,
@@ -468,10 +496,10 @@ export class MetricsService implements IMetricsProvider {
         machineId: vscode.env.machineId,
         batchId: Date.now().toString(36) + Math.random().toString(36).substring(2)
       };
-      
+
       // Add to pending metrics
       this.pendingMetrics.push(batchItem);
-      
+
       // Process the batch if we've reached the batch size or this is a forced sync
       if (force || this.pendingMetrics.length >= MetricsService.MAX_BATCH_SIZE) {
         await this.processBatch(force);
@@ -482,40 +510,40 @@ export class MetricsService implements IMetricsProvider {
     } catch (error) {
       const errorObj = error instanceof Error ? error : new Error(String(error));
       const errorMessage = errorObj.message;
-      
+
       this.consecutiveFailures++;
       this.lastSyncError = {
         error: errorObj,
         timestamp: Date.now()
       };
-      
+
       console.error('[Metrics] Sync failed:', error);
-      
+
       // Only show error notification for forced syncs or first few failures
       if (force || this.consecutiveFailures <= 3) {
         const message = this.isRateLimited
           ? 'Metrics sync rate limited. Will retry automatically.'
           : `Failed to sync metrics: ${errorMessage}`;
-          
+
         // Show error in status bar
         const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
         statusBarItem.text = '$(error) Sync error';
         statusBarItem.tooltip = message;
         statusBarItem.show();
-        
+
         // Auto-hide after 5 seconds
         setTimeout(() => {
           statusBarItem.dispose();
         }, 5000);
       }
-      
+
       // Schedule a retry with exponential backoff if not rate limited
       if (!this.isRateLimited) {
         const backoffTime = Math.min(
           MetricsService.RETRY_DELAY_MS * Math.pow(2, this.consecutiveFailures - 1),
           5 * 60 * 1000 // Max 5 minutes
         );
-        
+
         console.log(`[Metrics] Scheduling retry in ${backoffTime}ms`);
         setTimeout(() => this.syncWithBackend(force), backoffTime);
       }
@@ -529,7 +557,7 @@ export class MetricsService implements IMetricsProvider {
         MetricsService.RETRY_DELAY_MS * Math.pow(2, this.consecutiveFailures - 1),
         5 * 60 * 1000 // Max 5 minutes
       );
-      
+
       if (Date.now() - (this.lastSyncError?.timestamp || 0) < backoffTime) {
         console.log(`[Metrics] Sync delayed - waiting for backoff period (${backoffTime}ms)`);
         return;
@@ -538,17 +566,17 @@ export class MetricsService implements IMetricsProvider {
 
     this.isSyncing = true;
     let success = false;
-    
+
     try {
       // Get current metrics and reset the collector
       const metrics = this.metricsCollector.getMetrics();
-      
+
       // Skip if no meaningful data to sync
       if (!this.hasMeaningfulData(metrics) && !force) {
         console.log('[Metrics] No meaningful data to sync');
         return;
       }
-      
+
       // Add metadata
       const payload = {
         ...metrics,
@@ -559,7 +587,7 @@ export class MetricsService implements IMetricsProvider {
       };
 
       console.log('[Metrics] Syncing metrics with backend...');
-      
+
       // Send with retry logic
       for (let attempt = 1; attempt <= MetricsService.MAX_RETRY_ATTEMPTS; attempt++) {
         try {
@@ -569,25 +597,25 @@ export class MetricsService implements IMetricsProvider {
           this.lastSyncError = null;
           this.lastSyncTime = new Date();
           console.log('[Metrics] Successfully synced with backend');
-          
+
           // Show success notification only for forced syncs or after failures
           if (force || attempt > 1) {
             // Show sync success in status bar
             const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
             statusBarItem.text = '$(check) Metrics synced';
             statusBarItem.show();
-            
+
             // Auto-hide after 3 seconds
             setTimeout(() => {
               statusBarItem.dispose();
             }, 3000);
           }
           break;
-          
+
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
           console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
-          
+
           if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
             // Wait before retry with exponential backoff
             const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
@@ -598,17 +626,17 @@ export class MetricsService implements IMetricsProvider {
           }
         }
       }
-      
+
     } catch (error) {
       this.consecutiveFailures++;
       this.lastSyncError = {
         error: error instanceof Error ? error : new Error(String(error)),
         timestamp: Date.now()
       };
-      
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       console.error('[Metrics] All sync attempts failed:', error);
-      
+
       // Only show error notification for forced syncs or first few failures
       if (force || this.consecutiveFailures <= 3) {
         // Show error in status bar with retry option
@@ -617,25 +645,25 @@ export class MetricsService implements IMetricsProvider {
         statusBarItem.tooltip = errorMessage;
         statusBarItem.command = 'devtimetracker.forceSync';
         statusBarItem.show();
-        
+
         // Auto-hide after 10 seconds
         setTimeout(() => {
           statusBarItem.dispose();
         }, 10000);
       }
-      
+
       throw error; // Re-throw to be caught by forceSync if needed
-      
+
     } finally {
       this.isSyncing = false;
-      
+
       // Schedule next sync if not forced
       if (!force) {
         setTimeout(() => this.syncWithBackend(), MetricsService.SYNC_INTERVAL_MS);
       }
     }
   }
-  
+
   private hasMeaningfulData(metrics: any): boolean {
     // Check if there's any meaningful data to sync
     return (
@@ -647,7 +675,7 @@ export class MetricsService implements IMetricsProvider {
       (metrics.productivity?.focusTime ?? 0) > 0
     );
   }
-  
+
   private getEnvironmentInfo() {
     return {
       os: process.platform,
@@ -667,58 +695,56 @@ export class MetricsService implements IMetricsProvider {
     return this.metricsCollector.getMetrics();
   }
 
-  public handleActivity() {
-    const metrics = this.metricsCollector.getMetrics();
-    if (!metrics.productivity) return;
-    
-    // Update focus time (in seconds)
-    const now = new Date();
-    const lastUpdate = metrics.timestamp || now;
-    const secondsActive = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000);
-    
-    // Update productive hours (current hour)
-    const currentHour = now.getHours().toString().padStart(2, '0');
-    
-    this.metricsCollector.updateMetrics({
-      timestamp: now,
-      productivity: {
-        ...metrics.productivity,
-        focusTime: (metrics.productivity.focusTime || 0) + secondsActive,
-        productiveHours: {
-          ...metrics.productivity.productiveHours,
-          [currentHour]: (metrics.productivity.productiveHours?.[currentHour] || 0) + secondsActive
-        }
-      }
-    });
-    
-    this.lastActivityTime = Date.now();
-    if (this.isIdle) {
-      this.isIdle = false;
-      this.isTrackingPaused = false;
+  /**
+   * Mark user as active - tracking is enabled only during active periods
+   */
+  private markActive() {
+    const now = Date.now();
+    this.lastActivityTime = now;
+
+    // Resume tracking if we were inactive
+    if (!this.isActive) {
+      this.isActive = true;
       this.metricsCollector.resumeTracking();
-      console.log('Resumed tracking after idle period');
+      console.log('[MetricsService] ✅ User active - tracking enabled');
     }
-    this.resetIdleTimer();
-  }
 
-  private startIdleChecker() {
-    this.resetIdleTimer();
-  }
+    // Update metrics
+    const metrics = this.metricsCollector.getMetrics();
+    if (metrics.productivity) {
+      const nowDate = new Date();
+      const lastUpdate = metrics.timestamp || nowDate;
+      const secondsActive = Math.floor((nowDate.getTime() - lastUpdate.getTime()) / 1000);
+      const currentHour = nowDate.getHours().toString().padStart(2, '0');
 
-  private resetIdleTimer() {
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
+      this.metricsCollector.updateMetrics({
+        timestamp: nowDate,
+        productivity: {
+          ...metrics.productivity,
+          focusTime: (metrics.productivity.focusTime || 0) + secondsActive,
+          productiveHours: {
+            ...metrics.productivity.productiveHours,
+            [currentHour]: (metrics.productivity.productiveHours?.[currentHour] || 0) + secondsActive
+          }
+        }
+      });
     }
-    this.idleTimer = setTimeout(() => this.handleIdleState(), MetricsService.IDLE_TIMEOUT_MS);
   }
 
-  private handleIdleState() {
-    if (!this.isIdle) {
-      this.isIdle = true;
-      this.isTrackingPaused = true;
+  /**
+   * Mark user as inactive - tracking pauses immediately
+   */
+  private markInactive() {
+    if (this.isActive) {
+      this.isActive = false;
       this.metricsCollector.pauseTracking();
-      console.log('Paused tracking due to inactivity');
+      console.log('[MetricsService] ⏸️  User inactive - tracking paused');
     }
+  }
+
+  // Kept for backward compatibility - redirects to markActive
+  public handleActivity() {
+    this.markActive();
   }
 
   // Event Handlers
@@ -730,13 +756,13 @@ export class MetricsService implements IMetricsProvider {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
     }
-    
+
     this.disposables.forEach(d => d.dispose());
     this.disposables = [];
-    
+
     // Do one final sync before disposing
     this.syncWithBackend().catch(console.error);
-    
+
     this.clearTimers();
   }
 
@@ -744,10 +770,6 @@ export class MetricsService implements IMetricsProvider {
     if (this.syncInterval) {
       clearInterval(this.syncInterval);
       this.syncInterval = null;
-    }
-    if (this.idleTimer) {
-      clearTimeout(this.idleTimer);
-      this.idleTimer = null;
     }
   }
 }

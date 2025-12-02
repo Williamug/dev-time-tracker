@@ -4,6 +4,45 @@ All notable changes to the "dev-time-tracker" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [1.5.4] - 2025-12-02
+
+### Fixed
+- **Settings Persistence**: Fixed issue where Pomodoro settings would revert and not reflect on status bar
+  - Status bar now immediately displays new duration values when settings change
+  - Fixed hardcoded initial display to use actual config values
+  - Settings changes now persist correctly across sessions
+  - `updatePomodoroDisplay()` now called when settings change and timer is not running
+
+### Changed
+- Improved Pomodoro status bar initialization to respect user-configured work duration from the start
+
+## [1.5.2] - 2025-12-02
+
+### Fixed
+- **Settings Persistence**: Fixed issue where Pomodoro settings would revert and not reflect on status bar
+  - Status bar now immediately displays new duration values when settings change
+  - Fixed hardcoded initial display to use actual config values
+  - Settings changes now persist correctly across sessions
+  - `updatePomodoroDisplay()` now called when settings change and timer is not running
+
+### Changed
+- Improved Pomodoro status bar initialization to respect user-configured work duration from the start
+
+## [1.5.2] - 2025-12-02
+
+### Fixed
+- **Pomodoro Settings**: Fixed issue where Pomodoro timer settings wouldn't update without reloading VS Code
+  - Added configuration change listener to automatically reload Pomodoro settings
+  - Settings now update immediately when changed
+  - Option to restart current session with new settings
+
+### Changed
+- **Settings UI**: Improved Pomodoro settings for better VS Code UI experience
+  - Added rich markdown descriptions with examples
+  - Added maximum values for safety
+  - Added proper ordering for better organization
+  - Shows common duration presets in descriptions
+
 ## [1.5.1] - 2025-12-01
 
 ### Fixed

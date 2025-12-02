@@ -25,7 +25,11 @@ export class BackendService {
   private constructor() {
     this.config = vscode.workspace.getConfiguration('devtimetracker');
     const apiUrl = this.config.get<string>('apiUrl');
-    
+    const apiToken = this.config.get<string>('apiToken');
+
+    console.log('[BackendService] Constructor - API URL:', apiUrl);
+    console.log('[BackendService] Constructor - API Token (first 10 chars):', apiToken?.substring(0, 10) + '...');
+
     if (!apiUrl) {
       throw new Error('API URL is not configured. Please set devtimetracker.apiUrl in your settings.');
     }
@@ -49,6 +53,9 @@ export class BackendService {
         const token = this.config.get('apiToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+          console.log('[BackendService] Using token:', token?.toString().substring(0, 10) + '...');
+        } else {
+          console.warn('[BackendService] No API token configured!');
         }
         return config;
       },
@@ -63,7 +70,7 @@ export class BackendService {
       (response) => response,
       (error) => {
         let errorMessage = 'An error occurred';
-        
+
         if (error.response) {
           // Handle specific HTTP error statuses
           switch (error.response.status) {
@@ -92,10 +99,10 @@ export class BackendService {
           errorMessage = `Error: ${error.message}`;
           console.error('Request Error:', errorMessage);
         }
-        
+
         // Add error to the error log that can be viewed via a command
         this.logError(errorMessage);
-        
+
         return Promise.reject(new Error(errorMessage));
       }
     );
@@ -107,7 +114,7 @@ export class BackendService {
     }
     return BackendService.instance;
   }
-  
+
   private logError(message: string) {
     // Log errors to the extension's output channel
     const outputChannel = vscode.window.createOutputChannel('Dev Time Tracker');
@@ -141,7 +148,7 @@ export class BackendService {
 
   public async getSettings(key?: string): Promise<any> {
     try {
-      const url = key ? `/api/settings/${key}` : '/api/settings';
+      const url = key ? `/api/extension-settings/${key}` : '/api/extension-settings';
       const response = await this.client.get(url);
       return response.data;
     } catch (error) {
@@ -152,7 +159,7 @@ export class BackendService {
 
   public async updateSetting(key: string, value: any): Promise<any> {
     try {
-      const response = await this.client.put(`/api/settings/${key}`, { value });
+      const response = await this.client.put(`/api/extension-settings/${key}`, { value });
       return response.data;
     } catch (error) {
       console.error('Failed to update setting:', error);
@@ -162,7 +169,7 @@ export class BackendService {
 
   public async deleteSetting(key: string): Promise<boolean> {
     try {
-      await this.client.delete(`/api/settings/${key}`);
+      await this.client.delete(`/api/extension-settings/${key}`);
       return true;
     } catch (error) {
       console.error('Failed to delete setting:', error);
@@ -193,7 +200,12 @@ export class BackendService {
 
   public async updateExtensionSetting(key: string, value: any): Promise<ExtensionSetting | null> {
     try {
-      const response = await this.client.put(`/api/extension-settings/${key}`, { value });
+      // Backend expects value to be an array/object, so wrap primitives
+      const wrappedValue = Array.isArray(value) || typeof value === 'object' && value !== null
+        ? value
+        : { data: value };
+
+      const response = await this.client.put(`/api/extension-settings/${key}`, { value: wrappedValue });
       return response.data.data || null;
     } catch (error) {
       console.error(`Failed to update extension setting ${key}:`, error);
@@ -218,8 +230,8 @@ export class BackendService {
 
     while (attempts < maxRetries) {
       try {
-        await this.client.post('/api/events', { 
-          type: eventType, 
+        await this.client.post('/api/events', {
+          type: eventType,
           data,
           timestamp: new Date().toISOString()
         });
@@ -228,7 +240,7 @@ export class BackendService {
         attempts++;
         lastError = error as Error;
         console.error(`Failed to send event (attempt ${attempts}/${maxRetries}):`, error);
-        
+
         if (attempts < maxRetries) {
           // Exponential backoff: wait 1s, 2s, 4s, etc.
           const delay = Math.pow(2, attempts - 1) * 1000;
@@ -236,7 +248,7 @@ export class BackendService {
         }
       }
     }
-    
+
     console.error('All retry attempts failed for event:', eventType, 'Error:', lastError);
     return false;
   }
@@ -246,10 +258,10 @@ export class BackendService {
   }
 
   public async trackMetric(metricName: string, value: number, tags: Record<string, any> = {}): Promise<boolean> {
-    return this.sendEvent('metric', { 
-      name: metricName, 
+    return this.sendEvent('metric', {
+      name: metricName,
       value,
-      ...tags 
+      ...tags
     });
   }
 

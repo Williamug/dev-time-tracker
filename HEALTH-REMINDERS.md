@@ -71,12 +71,12 @@ This document outlines the configuration options for the health reminders in the
     "breakSnoozeDuration": 600,
     "breakNotificationType": "warning",
     "breakEnableSound": true,
-    
+
     "postureReminderInterval": 1800,
     "postureSnoozeDuration": 900,
     "postureNotificationType": "info",
     "postureEnableSound": true,
-    
+
     "eyeStrainInterval": 1200,
     "eyeStrainSnoozeDuration": 600,
     "eyeStrainNotificationType": "info",
