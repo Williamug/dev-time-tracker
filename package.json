@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.",
-  "version": "1.5.1",
+  "version": "2.0.0",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
@@ -57,6 +57,16 @@
         "title": "Toggle Pomodoro Timer"
       },
       {
+        "command": "devtimetracker.start202020Timer",
+        "title": "Start 20-20-20 Eye Rest Timer",
+        "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.testNotifications",
+        "title": "Test Notifications & Backend",
+        "category": "Dev Time Tracker"
+      },
+      {
         "command": "devtimetracker.openDashboard",
         "title": "Open Analytics Dashboard"
       },
@@ -88,30 +98,39 @@
           "type": "number",
           "default": 25,
           "minimum": 1,
-          "description": "Duration of work sessions in minutes"
+          "maximum": 120,
+          "order": 1,
+          "markdownDescription": "Duration of work sessions in **minutes**.\n\n- `25` minutes (default, classic Pomodoro)\n- `30` minutes\n- `45` minutes"
         },
         "devtimetracker.pomodoro.shortBreakDuration": {
           "type": "number",
           "default": 5,
           "minimum": 1,
-          "description": "Duration of short breaks in minutes"
+          "maximum": 30,
+          "order": 2,
+          "markdownDescription": "Duration of short breaks in **minutes**.\n\n- `5` minutes (default)\n- `10` minutes\n- `15` minutes"
         },
         "devtimetracker.pomodoro.longBreakDuration": {
           "type": "number",
           "default": 15,
           "minimum": 1,
-          "description": "Duration of long breaks in minutes"
+          "maximum": 60,
+          "order": 3,
+          "markdownDescription": "Duration of long breaks in **minutes**.\n\n- `15` minutes (default)\n- `20` minutes\n- `30` minutes"
         },
         "devtimetracker.pomodoro.sessionsBeforeLongBreak": {
           "type": "number",
           "default": 4,
           "minimum": 1,
-          "description": "Number of work sessions before a long break"
+          "maximum": 10,
+          "order": 4,
+          "markdownDescription": "Number of work sessions before taking a long break.\n\n- `4` sessions (default, classic Pomodoro)\n- `6` sessions\n- `8` sessions"
         },
         "devtimetracker.pomodoro.autoStartNextSession": {
           "type": "boolean",
           "default": true,
-          "description": "Automatically start the next session/break when the current one ends"
+          "order": 5,
+          "markdownDescription": "Automatically start the next session/break when the current one ends.\n\n**Enabled**: Next session starts automatically\n**Disabled**: You must manually start each session"
         },
         "devtimetracker.metrics.enabled": {
           "type": "boolean",
@@ -124,117 +143,172 @@
           "minimum": 60,
           "description": "Interval in seconds to sync metrics with the backend"
         },
-        "devtimetracker.health": {
-          "type": "object",
-          "title": "Health Reminders",
-          "description": "Health reminders appear as non-blocking notifications in the bottom right corner. They won't disrupt your workflow or split your editor.",
-          "properties": {
-            "breakReminderEnabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable break reminders in the status bar"
-            },
-            "breakReminderInterval": {
-              "type": "number",
-              "default": 3600,
-              "minimum": 300,
-              "description": "Time in seconds between break reminders (minimum 5 minutes, default 60 minutes)"
-            },
-            "breakSnoozeDuration": {
-              "type": "number",
-              "default": 900,
-              "minimum": 60,
-              "description": "Time in seconds to snooze break reminders (default 15 minutes)"
-            },
-            "breakNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "none",
-              "description": "Type of notification to show for break reminders (none means status bar only)"
-            },
-            "breakEnableSound": {
-              "type": "boolean",
-              "default": false,
-              "description": "Enable sound for break reminders"
-            },
-            "postureReminderEnabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable posture reminders in the status bar"
-            },
-            "postureReminderInterval": {
-              "type": "number",
-              "default": 1800,
-              "minimum": 300,
-              "description": "Time in seconds between posture reminders (minimum 5 minutes, default 30 minutes)"
-            },
-            "postureSnoozeDuration": {
-              "type": "number",
-              "default": 900,
-              "minimum": 60,
-              "description": "Time in seconds to snooze posture reminders (default 15 minutes)"
-            },
-            "postureNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "none",
-              "description": "Type of notification to show for posture reminders (none means status bar only)"
-            },
-            "postureEnableSound": {
-              "type": "boolean",
-              "default": false,
-              "description": "Enable sound for posture reminders"
-            },
-            "eyeStrainReminderEnabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Enable eye strain reminders in the status bar"
-            },
-            "eyeStrainReminderInterval": {
-              "type": "number",
-              "default": 1200,
-              "minimum": 300,
-              "description": "Time in seconds between eye strain reminders (minimum 5 minutes, default 20 minutes)"
-            },
-            "eyeStrainSnoozeDuration": {
-              "type": "number",
-              "default": 600,
-              "minimum": 60,
-              "description": "Time in seconds to snooze eye strain reminders (default 10 minutes)"
-            },
-            "eyeStrainNotificationType": {
-              "type": "string",
-              "enum": [
-                "info",
-                "warning",
-                "error",
-                "none"
-              ],
-              "default": "none",
-              "description": "Type of notification to show for eye strain reminders (none means status bar only)"
-            },
-            "eyeStrainEnableSound": {
-              "type": "boolean",
-              "default": false,
-              "description": "Enable sound for eye strain reminders"
-            }
-          }
+        "devtimetracker.health.breakReminderEnabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 1,
+          "markdownDescription": "Enable break reminders. **Reminders appear as non-blocking notifications and won't disrupt your workflow.**"
+        },
+        "devtimetracker.health.breakReminderInterval": {
+          "type": "number",
+          "default": 3600,
+          "minimum": 300,
+          "order": 2,
+          "markdownDescription": "Time in **seconds** between break reminders.\n\n- `1800` = 30 minutes\n- `3600` = 60 minutes (default)\n- `7200` = 2 hours"
+        },
+        "devtimetracker.health.breakSnoozeDuration": {
+          "type": "number",
+          "default": 900,
+          "minimum": 60,
+          "order": 3,
+          "markdownDescription": "Snooze duration in **seconds**.\n\n- `600` = 10 minutes\n- `900` = 15 minutes (default)\n- `1200` = 20 minutes"
+        },
+        "devtimetracker.health.breakNotificationType": {
+          "type": "string",
+          "enum": [
+            "none",
+            "info",
+            "warning",
+            "error"
+          ],
+          "default": "none",
+          "order": 4,
+          "enumDescriptions": [
+            "Status bar only (non-intrusive)",
+            "Show info notification",
+            "Show warning notification",
+            "Show error notification"
+          ],
+          "description": "Notification style for break reminders"
+        },
+        "devtimetracker.health.breakEnableSound": {
+          "type": "boolean",
+          "default": false,
+          "order": 5,
+          "description": "Play sound when break reminder appears"
+        },
+        "devtimetracker.health.postureReminderEnabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 6,
+          "markdownDescription": "Enable posture check reminders. **Helps prevent back pain and improve ergonomics.**"
+        },
+        "devtimetracker.health.postureReminderInterval": {
+          "type": "number",
+          "default": 1800,
+          "minimum": 300,
+          "order": 7,
+          "markdownDescription": "Time in **seconds** between posture reminders.\n\n- `1200` = 20 minutes\n- `1800` = 30 minutes (default)\n- `3600` = 60 minutes"
+        },
+        "devtimetracker.health.postureSnoozeDuration": {
+          "type": "number",
+          "default": 900,
+          "minimum": 60,
+          "order": 8,
+          "markdownDescription": "Snooze duration in **seconds**.\n\n- `600` = 10 minutes\n- `900` = 15 minutes (default)\n- `1200` = 20 minutes"
+        },
+        "devtimetracker.health.postureNotificationType": {
+          "type": "string",
+          "enum": [
+            "none",
+            "info",
+            "warning",
+            "error"
+          ],
+          "default": "none",
+          "order": 9,
+          "enumDescriptions": [
+            "Status bar only (non-intrusive)",
+            "Show info notification",
+            "Show warning notification",
+            "Show error notification"
+          ],
+          "description": "Notification style for posture reminders"
+        },
+        "devtimetracker.health.postureEnableSound": {
+          "type": "boolean",
+          "default": false,
+          "order": 10,
+          "description": "Play sound when posture reminder appears"
+        },
+        "devtimetracker.health.eyeStrainReminderEnabled": {
+          "type": "boolean",
+          "default": true,
+          "order": 11,
+          "markdownDescription": "Enable eye strain reminders. **Follows the 20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds.**"
+        },
+        "devtimetracker.health.eyeStrainReminderInterval": {
+          "type": "number",
+          "default": 1200,
+          "minimum": 300,
+          "order": 12,
+          "markdownDescription": "Time in **seconds** between eye strain reminders.\n\n- `1200` = 20 minutes (default, follows 20-20-20 rule)\n- `1800` = 30 minutes\n- `3600` = 60 minutes"
+        },
+        "devtimetracker.health.eyeStrainSnoozeDuration": {
+          "type": "number",
+          "default": 600,
+          "minimum": 60,
+          "order": 13,
+          "markdownDescription": "Snooze duration in **seconds**.\n\n- `300` = 5 minutes\n- `600` = 10 minutes (default)\n- `900` = 15 minutes"
+        },
+        "devtimetracker.health.eyeStrainNotificationType": {
+          "type": "string",
+          "enum": [
+            "none",
+            "info",
+            "warning",
+            "error"
+          ],
+          "default": "none",
+          "order": 14,
+          "enumDescriptions": [
+            "Status bar only (non-intrusive)",
+            "Show info notification",
+            "Show warning notification",
+            "Show error notification"
+          ],
+          "description": "Notification style for eye strain reminders"
+        },
+        "devtimetracker.health.eyeStrainEnableSound": {
+          "type": "boolean",
+          "default": false,
+          "order": 15,
+          "description": "Play sound when eye strain reminder appears"
         },
         "devtimetracker.goals.dailyCodingTarget": {
           "type": "number",
           "default": 1200,
           "minimum": 15,
           "description": "Daily coding target in minutes"
+        },
+        "devtimetracker.customReminders": {
+          "type": "array",
+          "default": [],
+          "description": "Custom reminders with conditions",
+          "items": {
+            "type": "object",
+            "properties": {
+              "title": {
+                "type": "string",
+                "description": "Reminder title"
+              },
+              "message": {
+                "type": "string",
+                "description": "Reminder message"
+              },
+              "interval": {
+                "type": "number",
+                "description": "Interval in seconds",
+                "default": 1800
+              },
+              "enabled": {
+                "type": "boolean",
+                "description": "Enable this reminder",
+                "default": true
+              }
+            }
+          },
+          "markdownDescription": "Add custom reminders.\n\nExample:\n```json\n[\n  {\n    \"title\": \"Commit Code\",\n    \"message\": \"Don't forget to commit your changes\",\n    \"interval\": 1800,\n    \"enabled\": true\n  }\n]\n```"
         }
       }
     }
