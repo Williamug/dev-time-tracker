@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
+import { MetricsService } from './services/MetricsService';
 
 interface StatusBarItems {
     activity: vscode.StatusBarItem;
     sessionTimer: vscode.StatusBarItem;
     todaySummary: vscode.StatusBarItem;
+    codeMetrics: vscode.StatusBarItem;
     pomodoro: vscode.StatusBarItem;
 }
 
@@ -33,21 +35,22 @@ export class StatusBarManager {
 
     private constructor(private context: vscode.ExtensionContext) {
         console.log('[StatusBar] Creating new StatusBarManager instance');
-        
+
         // Initialize last reset date
         this.lastResetDate = new Date();
         this.lastResetDate.setHours(0, 0, 0, 0);
-        
+
         try {
             this.loadPomodoroConfig();
             console.log('[StatusBar] Pomodoro config loaded');
-            
+
             // Create status bar items with higher priority (lower number = higher priority)
             console.log('[StatusBar] Creating status bar items');
             this.statusBarItems = {
-                activity: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
-                sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 3),
-                todaySummary: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
+                activity: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 5),
+                sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
+                todaySummary: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 3),
+                codeMetrics: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
                 pomodoro: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1)
             };
             console.log('[StatusBar] Status bar items created');
@@ -56,9 +59,35 @@ export class StatusBarManager {
             console.log('[StatusBar] Initializing status bar items');
             this.initializeStatusBarItems();
             console.log('[StatusBar] Status bar items initialized');
-            
+
             // Check for day change periodically (every 5 minutes)
             setInterval(() => this.checkForDayChange(), 5 * 60 * 1000);
+
+            // Listen for configuration changes
+            context.subscriptions.push(
+                vscode.workspace.onDidChangeConfiguration(e => {
+                    if (e.affectsConfiguration('devtimetracker.pomodoro')) {
+                        console.log('[Pomodoro] Configuration changed, reloading...');
+                        this.loadPomodoroConfig();
+
+                        // If pomodoro is running, offer to restart
+                        if (this.isPomodoroRunning) {
+                            vscode.window.showInformationMessage(
+                                'Pomodoro settings updated. Changes will apply to the next session.',
+                                'Restart Now'
+                            ).then(selection => {
+                                if (selection === 'Restart Now') {
+                                    this.stopPomodoro();
+                                    this.startPomodoro();
+                                }
+                            });
+                        } else {
+                            // Update the display with new config values
+                            this.updatePomodoroDisplay();
+                        }
+                    }
+                })
+            );
         } catch (error) {
             console.error('[StatusBar] Error during initialization:', error);
             throw error;
@@ -81,7 +110,7 @@ export class StatusBarManager {
 
   public static getInstance(context?: vscode.ExtensionContext): StatusBarManager | null {
     console.log('[StatusBar] Getting StatusBarManager instance');
-    
+
     try {
       if (!StatusBarManager.instance && context) {
         console.log('[StatusBar] Creating new instance');
@@ -103,14 +132,14 @@ export class StatusBarManager {
             return StatusBarManager.instance?.getPomodoroState();
           })
         ];
-        
+
         context.subscriptions.push(...commands);
         console.log('[StatusBar] Commands registered');
       } else if (!StatusBarManager.instance) {
         console.error('[StatusBar] No context provided for first-time initialization');
         return null;
       }
-      
+
       return StatusBarManager.instance;
     } catch (error) {
       console.error('[StatusBar] Error getting StatusBarManager instance:', error);
@@ -120,7 +149,7 @@ export class StatusBarManager {
 
     private initializeStatusBarItems(): void {
         console.log('[StatusBar] Initializing status bar items');
-        
+
         try {
             // Activity indicator
             this.statusBarItems.activity.text = '$(circle-outline) Idle';
@@ -143,8 +172,16 @@ export class StatusBarManager {
             this.statusBarItems.todaySummary.show();
             console.log('[StatusBar] Today\'s summary initialized');
 
-            // Pomodoro timer
-            this.statusBarItems.pomodoro.text = '$(clock) Pomodoro: 25:00';
+            // Code metrics
+            this.statusBarItems.codeMetrics.text = '$(graph) Lines: +0/-0';
+            this.statusBarItems.codeMetrics.tooltip = 'Code metrics for today';
+            this.statusBarItems.codeMetrics.command = 'devtimetracker.showStatus';
+            this.statusBarItems.codeMetrics.show();
+            console.log('[StatusBar] Code metrics initialized');
+
+            // Pomodoro timer - use actual config value
+            const workMins = this.pomodoroConfig.workDuration;
+            this.statusBarItems.pomodoro.text = `$(clock) Pomodoro: ${workMins.toString().padStart(2, '0')}:00`;
             this.statusBarItems.pomodoro.tooltip = 'Click to start Pomodoro';
             this.statusBarItems.pomodoro.command = 'devtimetracker.togglePomodoro';
             this.statusBarItems.pomodoro.show();
@@ -164,7 +201,7 @@ export class StatusBarManager {
                 this.statusBarItems.activity.backgroundColor = new vscode.ThemeColor('statusBar.debuggingBackground');
                 this.statusBarItems.activity.color = new vscode.ThemeColor('statusBar.debuggingForeground');
                 this.statusBarItems.activity.tooltip = 'You are actively coding';
-                
+
                 if (!this.sessionStartTime) {
                     console.log('[StatusBar] Starting new session');
                     this.startNewSession();
@@ -186,20 +223,20 @@ export class StatusBarManager {
         this.lastActiveTime = new Date();
         this.idleTime = 0;
         console.log(`[StatusBar] New session started at ${this.sessionStartTime.toISOString()}`);
-        
+
         // Clear any existing interval
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
         }
-        
+
         // Update timers every second
         this.updateInterval = setInterval(() => {
             if (!this.sessionStartTime) return;
-            
+
             try {
                 const now = new Date();
                 let activeTime = now.getTime() - this.sessionStartTime.getTime() - this.idleTime;
-                
+
                 // If we're currently active, update the last active time
                 if (this.isActive) {
                     this.lastActiveTime = now;
@@ -207,14 +244,14 @@ export class StatusBarManager {
                     // If we're idle, accumulate idle time
                     this.idleTime = now.getTime() - this.lastActiveTime.getTime();
                 }
-                
+
                 // Calculate display time (total time - idle time)
                 const diffMs = Math.max(0, now.getTime() - this.sessionStartTime.getTime() - this.idleTime);
                 const diffMins = Math.floor(diffMs / 60000);
                 const diffSecs = Math.floor((diffMs % 60000) / 1000);
                 const hours = Math.floor(diffMins / 60);
                 const minutes = diffMins % 60;
-                
+
                 // Format time as HH:MM:SS if more than an hour, otherwise MM:SS
                 let timeStr;
                 if (hours > 0) {
@@ -222,32 +259,53 @@ export class StatusBarManager {
                 } else {
                     timeStr = `${minutes}m ${diffSecs.toString().padStart(2, '0')}s`;
                 }
-                
+
                 this.statusBarItems.sessionTimer.text = `$(watch) ${timeStr}`;
                 this.statusBarItems.sessionTimer.tooltip = `Coding session: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
-                
+
                 // Update today's summary
                 this.statusBarItems.todaySummary.text = `$(calendar) Today: ${timeStr}`;
                 this.statusBarItems.todaySummary.tooltip = `Total coding time today: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
+
+                // Update code metrics
+                this.updateCodeMetrics();
             } catch (error) {
                 console.error('[StatusBar] Error updating session timer:', error);
             }
         }, 1000);
     }
 
+    private updateCodeMetrics(): void {
+        try {
+            const metricsService = MetricsService.getInstance();
+            const metrics = metricsService.getMetrics();
+
+            if (metrics && metrics.code) {
+                const linesAdded = metrics.code.lines.added || 0;
+                const linesRemoved = metrics.code.lines.removed || 0;
+                const fileTypes = Object.keys(metrics.code.fileTypes || {}).length;
+
+                this.statusBarItems.codeMetrics.text = `$(graph) Lines: +${linesAdded}/-${linesRemoved} | Files: ${fileTypes} types`;
+                this.statusBarItems.codeMetrics.tooltip = `Code Metrics:\nLines Added: ${linesAdded}\nLines Removed: ${linesRemoved}\nFile Types: ${fileTypes}`;
+            }
+        } catch (error) {
+            // Metrics service might not be initialized yet, that's okay
+        }
+    }
+
     private updateSessionTimer(): void {
         if (!this.sessionStartTime) return;
-        
+
         // Check if we need to reset for a new day
         this.checkForDayChange();
-        
+
         const now = new Date();
         const diffMs = now.getTime() - this.sessionStartTime.getTime() - this.idleTime;
         const diffMins = Math.floor(diffMs / 60000);
         const diffSecs = Math.floor((diffMs % 60000) / 1000);
         const hours = Math.floor(diffMins / 60);
         const minutes = diffMins % 60;
-        
+
         // Format time as HH:MM:SS if more than an hour, otherwise MM:SS
         let timeStr;
         if (hours > 0) {
@@ -255,10 +313,10 @@ export class StatusBarManager {
         } else {
             timeStr = `${minutes}m ${diffSecs.toString().padStart(2, '0')}s`;
         }
-        
+
         this.statusBarItems.sessionTimer.text = `$(watch) ${timeStr}`;
         this.statusBarItems.sessionTimer.tooltip = `Coding session: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
-                
+
         // Update today's summary
         this.statusBarItems.todaySummary.text = `$(calendar) Today: ${timeStr}`;
         this.statusBarItems.todaySummary.tooltip = `Total coding time today: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
@@ -268,24 +326,24 @@ export class StatusBarManager {
         try {
             const now = new Date();
             const lastReset = this.lastResetDate || new Date(0);
-            
+
             // Check if we've crossed midnight since the last reset
-            if (now.getDate() !== lastReset.getDate() || 
-                now.getMonth() !== lastReset.getMonth() || 
+            if (now.getDate() !== lastReset.getDate() ||
+                now.getMonth() !== lastReset.getMonth() ||
                 now.getFullYear() !== lastReset.getFullYear()) {
-                
+
                 console.log('[StatusBar] New day detected, resetting daily counters');
-                
+
                 // Reset the last reset date to today
                 this.lastResetDate = new Date();
                 this.lastResetDate.setHours(0, 0, 0, 0);
-                
+
                 // Reset daily counters
                 if (this.sessionStartTime) {
                     // Reset session start time to today
                     this.sessionStartTime = new Date();
                     this.idleTime = 0;
-                    
+
                     // Update the display to reflect the reset
                     this.updateSessionTimer();
                 }
@@ -311,6 +369,8 @@ export class StatusBarManager {
 
     private loadPomodoroConfig(): void {
         const config = vscode.workspace.getConfiguration('devtimetracker.pomodoro');
+        const previousWorkDuration = this.pomodoroConfig.workDuration;
+
         this.pomodoroConfig = {
             workDuration: config.get<number>('workDuration') || 25,
             shortBreakDuration: config.get<number>('shortBreakDuration') || 5,
@@ -319,11 +379,16 @@ export class StatusBarManager {
             autoStartNext: config.get<boolean>('autoStartNextSession') !== false
         };
         console.log('[Pomodoro] Loaded config:', this.pomodoroConfig);
+
+        // If config changed and Pomodoro is not running, reset the display
+        if (!this.isPomodoroRunning && previousWorkDuration !== this.pomodoroConfig.workDuration) {
+            this.pomodoroTimeLeft = this.pomodoroConfig.workDuration * 60;
+        }
     }
 
     private startPomodoro(): void {
         this.isPomodoroRunning = true;
-        
+
         // Determine if we're starting a work session or a break
         if (!this.isBreakTime) {
             // Starting a work session
@@ -331,32 +396,32 @@ export class StatusBarManager {
             console.log(`[Pomodoro] Starting work session (${this.pomodoroConfig.workDuration} minutes)`);
         } else {
             // Starting a break (short or long)
-            const isLongBreak = this.pomodoroSessionsCompleted > 0 && 
+            const isLongBreak = this.pomodoroSessionsCompleted > 0 &&
                               this.pomodoroSessionsCompleted % this.pomodoroConfig.sessionsBeforeLongBreak === 0;
-            
-            const breakDuration = isLongBreak 
-                ? this.pomodoroConfig.longBreakDuration 
+
+            const breakDuration = isLongBreak
+                ? this.pomodoroConfig.longBreakDuration
                 : this.pomodoroConfig.shortBreakDuration;
-                
+
             this.pomodoroTimeLeft = breakDuration * 60;
             console.log(`[Pomodoro] Starting ${isLongBreak ? 'long' : 'short'} break (${breakDuration} minutes)`);
         }
-        
+
         // Clear any existing interval
         if (this.pomodoroInterval) {
             clearInterval(this.pomodoroInterval);
         }
-        
+
         // Start the countdown
         this.pomodoroInterval = setInterval(() => {
             this.pomodoroTimeLeft--;
             this.updatePomodoroDisplay();
-            
+
             if (this.pomodoroTimeLeft <= 0) {
                 this.pomodoroTimeEnded();
             }
         }, 1000);
-        
+
         this.updatePomodoroDisplay();
     }
 
@@ -378,11 +443,11 @@ export class StatusBarManager {
             this.statusBarItems.pomodoro.tooltip = `Click to start ${nextMode} session`;
             return;
         }
-        
+
         const minutes = Math.floor(this.pomodoroTimeLeft / 60);
         const seconds = this.pomodoroTimeLeft % 60;
         const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        
+
         const mode = this.isBreakTime ? 'Break' : 'Work';
         const progress = this.getPomodoroProgress();
         this.statusBarItems.pomodoro.text = `$(clock) ${mode}: ${timeStr} ${progress}`;
@@ -394,7 +459,7 @@ export class StatusBarManager {
             clearInterval(this.pomodoroInterval);
             this.pomodoroInterval = null;
         }
-        
+
         if (this.isBreakTime) {
             // Break ended, start a work session
             this.isBreakTime = false;
@@ -403,12 +468,12 @@ export class StatusBarManager {
             const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
             statusBarItem.text = `$(info) ${message}`;
             statusBarItem.show();
-            
+
             // Auto-hide after 5 seconds
             setTimeout(() => {
                 statusBarItem.dispose();
             }, 5000);
-            
+
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();
             } else {
@@ -418,28 +483,28 @@ export class StatusBarManager {
             // Work session ended, take a break
             this.isBreakTime = true;
             this.pomodoroSessionsCompleted++;
-            
-            const isLongBreak = this.pomodoroSessionsCompleted > 0 && 
+
+            const isLongBreak = this.pomodoroSessionsCompleted > 0 &&
                               this.pomodoroSessionsCompleted % this.pomodoroConfig.sessionsBeforeLongBreak === 0;
-            
-            const breakDuration = isLongBreak 
-                ? this.pomodoroConfig.longBreakDuration 
+
+            const breakDuration = isLongBreak
+                ? this.pomodoroConfig.longBreakDuration
                 : this.pomodoroConfig.shortBreakDuration;
-            
-            const message = isLongBreak 
+
+            const message = isLongBreak
                 ? `Pomodoro session complete! Time for a long ${breakDuration}-minute break.`
                 : `Pomodoro session complete! Time for a ${breakDuration}-minute break.`;
-            
+
             // Show notification in status bar instead of popup
             const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
             statusBarItem.text = `$(info) ${message}`;
             statusBarItem.show();
-            
+
             // Auto-hide after 5 seconds
             setTimeout(() => {
                 statusBarItem.dispose();
             }, 5000);
-            
+
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();
             } else {
@@ -450,9 +515,9 @@ export class StatusBarManager {
 
     private getPomodoroProgress(): string {
         if (!this.isPomodoroRunning) return '';
-        
+
         if (this.isBreakTime) {
-            const isLongBreak = this.pomodoroSessionsCompleted > 0 && 
+            const isLongBreak = this.pomodoroSessionsCompleted > 0 &&
                               this.pomodoroSessionsCompleted % this.pomodoroConfig.sessionsBeforeLongBreak === 0;
             return isLongBreak ? '(Long Break)' : '(Short Break)';
         } else {
@@ -484,7 +549,7 @@ export class StatusBarManager {
                 console.error('[StatusBar] Error disposing status bar item:', error);
             }
         });
-        
+
         // Clear any active intervals
         if (this.pomodoroInterval) {
             clearInterval(this.pomodoroInterval);
