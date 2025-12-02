@@ -11,26 +11,26 @@ export class HealthService {
   private backendService: BackendService | null = null;
 
   // Break reminder settings
-  private breakReminderInterval = 1;
+  private breakReminderInterval = 60; // 60 minutes default
   private breakReminderEnabled = true;
-  private breakSnoozeDuration = 5;
+  private breakSnoozeDuration = 15; // 15 minutes default
   private breakNotificationType: 'info' | 'warning' | 'error' | 'none' = 'none';
   private breakEnableSound = false;
   private breakSnoozedUntil = 0;
   private context?: vscode.ExtensionContext;
 
   // Posture reminder settings
-  private postureReminderInterval = 1;
+  private postureReminderInterval = 30; // 30 minutes default
   private postureReminderEnabled = true;
-  private postureSnoozeDuration = 5;
+  private postureSnoozeDuration = 15; // 15 minutes default
   private postureNotificationType: 'info' | 'warning' | 'error' | 'none' = 'none';
   private postureEnableSound = false;
   private postureSnoozedUntil = 0;
 
   // Eye strain settings
-  private eyeStrainInterval = 1;
+  private eyeStrainInterval = 20; // 20 minutes default (20-20-20 rule)
   private eyeStrainEnabled = true;
-  private eyeStrainSnoozeDuration = 5;
+  private eyeStrainSnoozeDuration = 10; // 10 minutes default
   private eyeStrainNotificationType: 'info' | 'warning' | 'error' | 'none' = 'none';
   private eyeStrainEnableSound = false;
   private eyeStrainSnoozedUntil = 0;
@@ -90,21 +90,21 @@ export class HealthService {
       this.breakReminderInterval = Math.floor((config.get<number>('breakReminderInterval') ?? 3600) / 60);
       this.breakReminderEnabled = config.get<boolean>('breakReminderEnabled') ?? true;
       this.breakSnoozeDuration = Math.floor((config.get<number>('breakSnoozeDuration') ?? 900) / 60);
-      this.breakNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('breakNotificationType') ?? 'none';
+      this.breakNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('breakNotificationType') ?? 'info';
       this.breakEnableSound = config.get<boolean>('breakEnableSound') ?? false;
 
       // Posture reminder settings (convert seconds to minutes)
       this.postureReminderInterval = Math.floor((config.get<number>('postureReminderInterval') ?? 1800) / 60);
       this.postureReminderEnabled = config.get<boolean>('postureReminderEnabled') ?? true;
       this.postureSnoozeDuration = Math.floor((config.get<number>('postureSnoozeDuration') ?? 900) / 60);
-      this.postureNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('postureNotificationType') ?? 'none';
+      this.postureNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('postureNotificationType') ?? 'info';
       this.postureEnableSound = config.get<boolean>('postureEnableSound') ?? false;
 
       // Eye strain reminder settings (convert seconds to minutes)
       this.eyeStrainInterval = Math.floor((config.get<number>('eyeStrainReminderInterval') ?? 1200) / 60);
       this.eyeStrainEnabled = config.get<boolean>('eyeStrainReminderEnabled') ?? true;
       this.eyeStrainSnoozeDuration = Math.floor((config.get<number>('eyeStrainSnoozeDuration') ?? 600) / 60);
-      this.eyeStrainNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('eyeStrainNotificationType') ?? 'none';
+      this.eyeStrainNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('eyeStrainNotificationType') ?? 'info';
       this.eyeStrainEnableSound = config.get<boolean>('eyeStrainEnableSound') ?? false;    } catch (error) {
       console.error('[HealthService] Error loading configuration:', error);
       this.setDefaultConfig();
@@ -116,7 +116,7 @@ export class HealthService {
     this.breakReminderInterval = 60; // 60 minutes (3600 seconds)
     this.breakReminderEnabled = true;
     this.breakSnoozeDuration = 15; // 15 minutes (900 seconds)
-    this.breakNotificationType = 'none';
+    this.breakNotificationType = 'info';
     this.breakEnableSound = false;
     this.breakSnoozedUntil = 0;
 
@@ -124,7 +124,7 @@ export class HealthService {
     this.postureReminderInterval = 30; // 30 minutes (1800 seconds)
     this.postureReminderEnabled = true;
     this.postureSnoozeDuration = 15; // 15 minutes (900 seconds)
-    this.postureNotificationType = 'none';
+    this.postureNotificationType = 'info';
     this.postureEnableSound = false;
     this.postureSnoozedUntil = 0;
 
@@ -132,7 +132,7 @@ export class HealthService {
     this.eyeStrainInterval = 20; // 20 minutes (1200 seconds)
     this.eyeStrainEnabled = true;
     this.eyeStrainSnoozeDuration = 10; // 10 minutes (600 seconds)
-    this.eyeStrainNotificationType = 'none';
+    this.eyeStrainNotificationType = 'info';
     this.eyeStrainEnableSound = false;
     this.eyeStrainSnoozedUntil = 0;
   }  private setupEventListeners(): void {
@@ -217,6 +217,7 @@ export class HealthService {
 
   private async checkBreakReminder(): Promise<void> {
     if (!this.breakReminderEnabled) {
+      this.healthStatusBar.clearBreakReminder();
       return;
     }
 
@@ -232,6 +233,7 @@ export class HealthService {
     // Reset snooze if expired
     if (this.breakSnoozedUntil > 0 && now >= this.breakSnoozedUntil) {
       this.breakSnoozedUntil = 0;
+      this.lastBreakTime = now; // Reset timer after snooze expires
     }
 
     const timeSinceLastBreak = now - this.lastBreakTime;
@@ -239,6 +241,7 @@ export class HealthService {
 
     if (timeSinceLastBreak >= intervalMs) {
       await this.showBreakReminder();
+      this.lastBreakTime = now; // Reset timer after showing notification
     } else {
       const minutesRemaining = Math.ceil((intervalMs - timeSinceLastBreak) / 60000);
       this.healthStatusBar.updateBreakReminder(minutesRemaining);
@@ -247,6 +250,7 @@ export class HealthService {
 
   private async checkPostureReminder(): Promise<void> {
     if (!this.postureReminderEnabled) {
+      this.healthStatusBar.clearPostureReminder();
       return;
     }
 
@@ -262,6 +266,7 @@ export class HealthService {
     // Reset snooze if expired
     if (this.postureSnoozedUntil > 0 && now >= this.postureSnoozedUntil) {
       this.postureSnoozedUntil = 0;
+      this.lastPostureCheck = now; // Reset timer after snooze expires
     }
 
     const timeSinceLastCheck = now - this.lastPostureCheck;
@@ -269,6 +274,7 @@ export class HealthService {
 
     if (timeSinceLastCheck >= intervalMs) {
       await this.showPostureReminder();
+      this.lastPostureCheck = now; // Reset timer after showing notification
     } else {
       const minutesRemaining = Math.ceil((intervalMs - timeSinceLastCheck) / 60000);
       this.healthStatusBar.updatePostureReminder(minutesRemaining);
@@ -277,6 +283,7 @@ export class HealthService {
 
   private async checkEyeStrainReminder(): Promise<void> {
     if (!this.eyeStrainEnabled) {
+      this.healthStatusBar.clearEyeStrainReminder();
       return;
     }
 
@@ -292,6 +299,7 @@ export class HealthService {
     // Reset snooze if expired
     if (this.eyeStrainSnoozedUntil > 0 && now >= this.eyeStrainSnoozedUntil) {
       this.eyeStrainSnoozedUntil = 0;
+      this.lastEyeStrainBreak = now; // Reset timer after snooze expires
     }
 
     const timeSinceLastBreak = now - this.lastEyeStrainBreak;
@@ -306,7 +314,6 @@ export class HealthService {
   }
 
   private async showBreakReminder(): Promise<void> {
-    const now = Date.now();
     this.healthStatusBar.showBreakReminder(0); // Show active reminder in status bar
 
     if (this.breakNotificationType !== 'none') {
@@ -314,84 +321,32 @@ export class HealthService {
       const message = `⏰ Time for a break! You've been coding for ${intervalMinutes} minutes. Stand up, stretch, and rest your eyes.`;
       await this.showNotification(message, 'break');
     }
-
-    this.lastBreakTime = now;
   }
 
   private async showPostureReminder(): Promise<void> {
-    const now = Date.now();
     this.healthStatusBar.showPostureReminder(0); // Show active reminder in status bar
 
     if (this.postureNotificationType !== 'none') {
       const message = '🧍 Posture check! Sit up straight, adjust your chair height, and keep your feet flat on the floor.';
       await this.showNotification(message, 'posture');
     }
-
-    this.lastPostureCheck = now;
   }
 
   private async showEyeStrainReminder(): Promise<void> {
-    const now = Date.now();
     this.healthStatusBar.showEyeStrainReminder(0); // Show active reminder in status bar
 
     if (this.eyeStrainNotificationType !== 'none') {
       const message = '👁️ Eye break time! Follow the 20-20-20 rule: Look at something 20 feet away for 20 seconds.';
       await this.showNotification(message, 'eyeStrain');
     }
-
-    this.lastEyeStrainBreak = now;
   }
 
   private async showNotification(message: string, type: 'break' | 'posture' | 'eyeStrain'): Promise<void> {
-    const snoozeMinutes = type === 'break' ? this.breakSnoozeDuration :
-                         type === 'posture' ? this.postureSnoozeDuration :
-                         this.eyeStrainSnoozeDuration;
+    // Show a simple, non-blocking notification without action buttons
+    vscode.window.showInformationMessage(message);
 
-    // Show a non-blocking notification in the bottom right
-    const snoozeLabel = `$(clock) Snooze for ${snoozeMinutes} minutes`;
-    const dismissLabel = `$(check) Got it!`;
-    const disableLabel = `$(x) Disable ${type === 'break' ? 'break' : type === 'posture' ? 'posture' : 'eye strain'} reminders`;
-    
-    // Use showInformationMessage but don't await it - this is less intrusive
-    vscode.window.showInformationMessage(
-      message,
-      { modal: false }, // Non-blocking
-      snoozeLabel,
-      dismissLabel,
-      disableLabel
-    ).then(selection => {
-      if (selection === snoozeLabel) {
-        const snoozeTime = Date.now() + (snoozeMinutes * 60000);
-        if (type === 'break') {
-          this.breakSnoozedUntil = snoozeTime;
-          this.healthStatusBar.updateBreakReminder(snoozeMinutes);
-        } else if (type === 'posture') {
-          this.postureSnoozedUntil = snoozeTime;
-          this.healthStatusBar.updatePostureReminder(snoozeMinutes);
-        } else {
-          this.eyeStrainSnoozedUntil = snoozeTime;
-          this.healthStatusBar.updateEyeStrainReminder(snoozeMinutes);
-        }
-        vscode.window.showInformationMessage(`${this.getReminderTypeLabel(type)} snoozed for ${snoozeMinutes} minutes`);
-        console.log(`[HealthService] ${type} snoozed for ${snoozeMinutes} minutes`);
-      } else if (selection === dismissLabel) {
-        // Update status bar to show next reminder time
-        if (type === 'break') {
-          const minutesUntilNext = this.breakReminderInterval;
-          this.healthStatusBar.updateBreakReminder(minutesUntilNext);
-        } else if (type === 'posture') {
-          const minutesUntilNext = this.postureReminderInterval;
-          this.healthStatusBar.updatePostureReminder(minutesUntilNext);
-        } else {
-          const minutesUntilNext = this.eyeStrainInterval;
-          this.healthStatusBar.updateEyeStrainReminder(minutesUntilNext);
-        }
-        console.log(`[HealthService] ${type} reminder dismissed`);
-      } else if (selection === disableLabel) {
-        // Disable the reminder type
-        this.disableReminder(type);
-      }
-    });
+    // Log for debugging
+    console.log(`[HealthService] Showed ${type} reminder: ${message}`);
   }
 
   private getReminderTypeLabel(type: 'break' | 'posture' | 'eyeStrain'): string {
@@ -407,7 +362,7 @@ export class HealthService {
     const key = type === 'break' ? 'breakReminderEnabled' :
                 type === 'posture' ? 'postureReminderEnabled' :
                 'eyeStrainReminderEnabled';
-    
+
     await config.update(key, false, vscode.ConfigurationTarget.Global);
     vscode.window.showInformationMessage(
       `${this.getReminderTypeLabel(type)} disabled. You can re-enable it in settings.`,
@@ -415,6 +370,44 @@ export class HealthService {
     ).then(selection => {
       if (selection === 'Open Settings') {
         vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker.health');
+      }
+    });
+  }
+
+  public async start202020Timer(): Promise<void> {
+    // Show an information message with a 20-second countdown
+    let countdown = 20;
+    const countdownMessage = vscode.window.setStatusBarMessage(
+      `$(eye) 20-20-20 Rule: Look at something 20 feet away for ${countdown} seconds...`
+    );
+
+    // Create a countdown timer
+    const timer = setInterval(() => {
+      countdown--;
+      if (countdown > 0) {
+        countdownMessage.dispose();
+        vscode.window.setStatusBarMessage(
+          `$(eye) 20-20-20 Rule: Look at something 20 feet away for ${countdown} seconds...`
+        );
+      } else {
+        clearInterval(timer);
+        countdownMessage.dispose();
+        vscode.window.showInformationMessage('$(check) Great! Your 20-20-20 break is complete. Your eyes should feel refreshed!');
+
+        // Reset the eye strain timer
+        this.lastEyeStrainBreak = Date.now();
+      }
+    }, 1000);
+
+    // Show initial notification
+    vscode.window.showInformationMessage(
+      '$(eye) Starting 20-20-20 timer: Look at something 20 feet away for 20 seconds.',
+      'Cancel'
+    ).then(selection => {
+      if (selection === 'Cancel') {
+        clearInterval(timer);
+        countdownMessage.dispose();
+        vscode.window.showInformationMessage('20-20-20 timer cancelled');
       }
     });
   }
