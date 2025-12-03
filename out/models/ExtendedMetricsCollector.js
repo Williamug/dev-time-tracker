@@ -161,13 +161,23 @@ class ExtendedMetricsCollector {
         // Update file type metrics
         if (fileExtension && metrics.code) {
             metrics.code.fileTypes = metrics.code.fileTypes || {};
-            metrics.code.fileTypes[fileExtension] = (metrics.code.fileTypes[fileExtension] || 0) + 1;
-            // Initialize files if needed
+            // Track unique file types, not increment per change
+            if (!metrics.code.fileTypes[fileExtension]) {
+                metrics.code.fileTypes[fileExtension] = 1;
+            }
+            // Initialize files and lines if needed
             if (!metrics.code.files) {
                 metrics.code.files = { modified: 0, created: 0, deleted: 0 };
             }
-            // Update modified files count
-            metrics.code.files.modified = (metrics.code.files.modified || 0) + 1;
+            if (!metrics.code.lines) {
+                metrics.code.lines = { added: 0, removed: 0, total: 0 };
+            }
+            // Track line changes with actual counts
+            const linesAdded = data.linesAdded || 0;
+            const linesRemoved = data.linesRemoved || 0;
+            metrics.code.lines.added = (metrics.code.lines.added || 0) + linesAdded;
+            metrics.code.lines.removed = (metrics.code.lines.removed || 0) + linesRemoved;
+            metrics.code.lines.total = (metrics.code.lines.total || 0) + linesAdded + linesRemoved;
             this.updateMetrics(metrics);
         }
     }

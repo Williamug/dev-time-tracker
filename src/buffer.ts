@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { DiffService } from './services/DiffService';
 
 export interface CodingActivityEvent {
   event_type: 'typing' | 'file_save' | 'file_open' | 'file_close' | 'debug' | 'mousemove';
@@ -15,6 +16,7 @@ export interface CodingActivityEvent {
     characters_typed?: number;
     session_id?: string;
     branch?: string;
+    diff?: string;
     [key: string]: any;
   };
 }
@@ -28,11 +30,13 @@ export class EventBuffer {
   private currentFile: string = '';
   private currentLanguage: string = '';
   private projectName: string = '';
+  private diffService: DiffService | null = null;
 
   constructor(
     private apiUrl: string,
     private apiToken: string,
-    private sessionId: string
+    private sessionId: string,
+    diffService?: DiffService | null
   ) {
     // Remove trailing slashes from API URL
     this.apiUrl = apiUrl.replace(/\/+$/, '');
@@ -43,11 +47,14 @@ export class EventBuffer {
       this.projectName = workspaceFolder.name;
     }
 
+    this.diffService = diffService || null;
+
     console.log('[EventBuffer] Initialized with:', {
       apiUrl: this.apiUrl,
       hasToken: !!this.apiToken,
       sessionId: this.sessionId,
-      projectName: this.projectName
+      projectName: this.projectName,
+      hasDiffService: !!this.diffService
     });
   }
 
@@ -84,7 +91,18 @@ export class EventBuffer {
     const endedAt = new Date(now).toISOString();
     this.lastEventTime = now;
 
-    const activity: CodingActivityEvent = {
+    const filePath = editor.document.uri.fsPath;
+
+    // Get diff data if available
+    let diffData = null;
+    if (this.diffService && (eventType === 'typing' || eventType === 'file_save')) {
+      try {
+        diffData = this.diffService.getDiffAndReset(filePath);
+      } catch (error) {
+        console.error('[EventBuffer] Error getting diff data:', error);
+        // Continue without diff data
+      }
+    }    const activity: CodingActivityEvent = {
       event_type: eventType,
       duration: Math.max(1, duration), // at least 1 second
       file_path: vscode.workspace.asRelativePath(editor.document.uri),
@@ -93,11 +111,12 @@ export class EventBuffer {
       started_at: startedAt,
       ended_at: endedAt,
       keystrokes: extraData?.keystrokes ?? 0,
-      lines_added: extraData?.lines_added ?? 0,
-      lines_removed: extraData?.lines_removed ?? 0,
+      lines_added: diffData?.linesAdded ?? extraData?.lines_added ?? 0,
+      lines_removed: diffData?.linesRemoved ?? extraData?.lines_removed ?? 0,
       metadata: {
         session_id: this.sessionId,
-        characters_typed: extraData?.keystrokes ?? 0
+        characters_typed: extraData?.keystrokes ?? 0,
+        ...(diffData?.diff && { diff: diffData.diff })
       }
     };
 
@@ -105,7 +124,8 @@ export class EventBuffer {
     console.log(`[EventBuffer] Added ${eventType} event. Buffer size: ${this.buffer.length}`, {
       keystrokes: activity.keystrokes,
       lines_added: activity.lines_added,
-      lines_removed: activity.lines_removed
+      lines_removed: activity.lines_removed,
+      hasDiff: !!diffData?.diff
     });
 
     if (this.buffer.length >= this.batchSize) {
@@ -156,6 +176,11 @@ export class EventBuffer {
       // Show error notification
       vscode.window.showErrorMessage(`Failed to sync activities: ${err}`);
     }
+  }
+
+  setDiffService(diffService: DiffService | null) {
+    this.diffService = diffService;
+    console.log('[EventBuffer] DiffService updated:', !!diffService);
   }
 
   stop() {
