@@ -35,6 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.MetricsService = void 0;
 const vscode = __importStar(require("vscode"));
+const axios_1 = require("axios");
 const ExtendedMetricsCollector_1 = require("../models/ExtendedMetricsCollector");
 const Metrics_1 = require("../models/Metrics");
 class MetricsService {
@@ -44,19 +45,6 @@ class MetricsService {
     baseCollector;
     disposables = [];
     syncInterval = null;
-    typingStats = { speed: 0, accuracy: 100 };
-    sessionStartTime = Date.now();
-    activeDocumentLanguage;
-    // IMetricsProvider implementation
-    getTypingStats() {
-        return { ...this.typingStats };
-    }
-    getCurrentSessionDuration() {
-        return (Date.now() - this.sessionStartTime) / 1000; // in seconds
-    }
-    getActiveDocumentLanguage() {
-        return this.activeDocumentLanguage;
-    }
     lastSyncTime = null;
     backendService = null;
     apiUrl = null;
@@ -71,42 +59,36 @@ class MetricsService {
     static MAX_BATCH_SIZE = 100; // Maximum number of events per batch
     static RATE_LIMIT_WINDOW_MS = 60000; // 1 minute rate limit window
     static RATE_LIMIT_MAX_REQUESTS = 30; // Max requests per window
+    static IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes of inactivity
     // Rate limiting state
     requestTimestamps = [];
     pendingMetrics = [];
     lastSyncAttempt = 0;
     isRateLimited = false;
     rateLimitResetTime = 0;
-    // Activity tracking - no idle timer, purely activity-based
+    // Idle tracking
     lastActivityTime = Date.now();
-    isActive = false; // Only active during user interaction
-    isWindowFocused = true;
+    isIdle = false;
+    idleTimer = null;
+    isTrackingPaused = false;
     constructor(backendService) {
         this.metrics = new Map();
+        // Initialize base metrics collector
         this.baseCollector = Metrics_1.MetricsCollector.getInstance();
+        // Wrap with extended collector for additional functionality
         this.metricsCollector = ExtendedMetricsCollector_1.ExtendedMetricsCollector.getInstance(this.baseCollector);
-        this.initialize();
-        // Track active document language
-        this.activeDocumentLanguage = vscode.window.activeTextEditor?.document.languageId;
-        this.disposables.push(vscode.window.onDidChangeActiveTextEditor(editor => {
-            this.activeDocumentLanguage = editor?.document.languageId;
-        }));
         if (backendService) {
             this.backendService = backendService;
         }
+        this.initialize();
     }
     static getInstance(backendService) {
         if (!MetricsService.instance) {
-            console.log('[MetricsService] Creating new instance, backendService:', backendService ? '✅ Provided' : '❌ Not provided');
             MetricsService.instance = new MetricsService(backendService);
         }
         else if (backendService) {
             // Update backend service reference if provided
-            console.log('[MetricsService] Updating existing instance with backendService');
             MetricsService.instance.backendService = backendService;
-        }
-        else {
-            console.log('[MetricsService] Reusing existing instance, backendService:', MetricsService.instance.backendService ? '✅ Available' : '❌ Not available');
         }
         return MetricsService.instance;
     }
@@ -114,27 +96,6 @@ class MetricsService {
         this.loadConfig();
         this.setupEventListeners();
         this.startSyncInterval();
-    }
-    /**
-     * Updates the rate limit counter and checks if we're currently rate limited
-     * @private
-     */
-    updateRateLimitCounter() {
-        const now = Date.now();
-        // Remove timestamps older than the rate limit window
-        this.requestTimestamps = this.requestTimestamps.filter(timestamp => now - timestamp < MetricsService.RATE_LIMIT_WINDOW_MS);
-        // Check if we've exceeded the rate limit
-        if (this.requestTimestamps.length >= MetricsService.RATE_LIMIT_MAX_REQUESTS) {
-            this.isRateLimited = true;
-            // Set the reset time to the oldest timestamp + window duration
-            const oldestTimestamp = Math.min(...this.requestTimestamps);
-            this.rateLimitResetTime = oldestTimestamp + MetricsService.RATE_LIMIT_WINDOW_MS;
-            console.log(`[Metrics] Rate limited. Resets at ${new Date(this.rateLimitResetTime).toISOString()}`);
-        }
-        else {
-            // Add current timestamp to the request history
-            this.requestTimestamps.push(now);
-        }
     }
     getDefaultCodeMetrics() {
         return {
@@ -156,22 +117,19 @@ class MetricsService {
         });
     }
     setupEventListeners() {
-        // Document changes - mark active on typing
+        // Document changes
         this.disposables.push(vscode.workspace.onDidChangeTextDocument(e => {
-            this.markActive();
+            this.handleActivity();
             this.handleDocumentChange(e);
         }));
-        // Track user activity - only these actions mark user as active
-        this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.markActive()), vscode.window.onDidChangeTextEditorSelection(() => this.markActive()), vscode.window.onDidChangeWindowState(state => {
-            this.isWindowFocused = state.focused;
+        // Track user activity
+        this.disposables.push(vscode.window.onDidChangeActiveTextEditor(() => this.handleActivity()), vscode.window.onDidChangeTextEditorSelection(() => this.handleActivity()), vscode.window.onDidChangeWindowState(state => {
             if (state.focused) {
-                this.markActive();
-            }
-            else {
-                // Window lost focus - immediately mark inactive
-                this.markInactive();
+                this.handleActivity();
             }
         }));
+        // Start idle checker
+        this.startIdleChecker();
         // File operations
         this.disposables.push(vscode.workspace.onDidCreateFiles(e => {
             this.handleFilesCreated(e.files);
@@ -218,15 +176,7 @@ class MetricsService {
         catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error during sync';
             console.error('[Metrics] Force sync failed:', error);
-            // Show error in status bar instead of popup
-            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-            statusBarItem.text = '$(error) Failed to sync metrics';
-            statusBarItem.tooltip = errorMessage;
-            statusBarItem.show();
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusBarItem.dispose();
-            }, 5000);
+            vscode.window.showErrorMessage(`Failed to sync metrics: ${errorMessage}`, { modal: false });
             return {
                 success: false,
                 error: errorMessage
@@ -267,29 +217,10 @@ class MetricsService {
             // Skip if no actual changes
             if (contentChanges.length === 0)
                 return;
-            // Calculate actual lines added/removed
-            let totalLinesAdded = 0;
-            let totalLinesRemoved = 0;
-            for (const contentChange of contentChanges) {
-                const newLineCount = contentChange.text.split('\n').length - 1;
-                const oldLineCount = contentChange.range.end.line - contentChange.range.start.line;
-                if (newLineCount > oldLineCount) {
-                    totalLinesAdded += (newLineCount - oldLineCount);
-                }
-                else if (oldLineCount > newLineCount) {
-                    totalLinesRemoved += (oldLineCount - newLineCount);
-                }
-                // Also count actual text changes (even on same line)
-                if (contentChange.text.length > 0 && newLineCount === oldLineCount) {
-                    totalLinesAdded += 1; // Count modifications as additions
-                }
-            }
-            // Record the change with line counts
+            // Record the change
             this.metricsCollector.recordChange(filePath, {
                 language: languageId,
-                changes: totalLinesAdded + totalLinesRemoved,
-                linesAdded: totalLinesAdded,
-                linesRemoved: totalLinesRemoved,
+                changes: contentChanges.length,
                 timestamp: Date.now()
             });
             // Get current metrics without resetting
@@ -362,41 +293,79 @@ class MetricsService {
                 this.consecutiveFailures = 0;
                 this.lastSyncError = null;
                 this.lastSyncTime = new Date();
-                console.log('[Metrics] Successfully synced with backend');
+                console.log(`[Metrics] Successfully synced batch of ${batch.length} events`);
                 // Show success notification only for forced syncs or after failures
                 if (force || attempt > 1) {
-                    // Show sync success in status bar
-                    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-                    statusBarItem.text = '$(check) Metrics synced';
-                    statusBarItem.show();
-                    // Auto-hide after 3 seconds
-                    setTimeout(() => {
-                        statusBarItem.dispose();
-                    }, 3000);
+                    vscode.window.showInformationMessage(`Synced ${batch.length} metrics to server`, { modal: false });
                 }
                 break;
             }
             catch (error) {
-                const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-                console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
+                lastError = error instanceof Error ? error : new Error(String(error));
+                const errorMessage = lastError.message;
+                // Check for rate limit headers if available
+                if ((0, axios_1.isAxiosError)(error) && error.response) {
+                    if (error.response.headers?.['x-ratelimit-remaining'] === '0') {
+                        const resetTime = parseInt(String(error.response.headers['x-ratelimit-reset'] || '0')) * 1000;
+                        this.handleRateLimit(resetTime);
+                    }
+                    else if (error.response.status === 429) {
+                        // Standard 429 Too Many Requests
+                        const retryAfter = parseInt(String(error.response.headers['retry-after'] || '60')) * 1000;
+                        this.handleRateLimit(Date.now() + retryAfter);
+                    }
+                }
+                console.error(`[Metrics] Batch sync attempt ${attempt} failed:`, errorMessage);
                 if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
                     // Wait before retry with exponential backoff
                     const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-                    console.log(`[Metrics] Retrying in ${delay}ms...`);
+                    console.log(`[Metrics] Retrying batch in ${delay}ms...`);
                     await new Promise(resolve => setTimeout(resolve, delay));
-                }
-                else {
-                    // On final failure, update error state
-                    this.consecutiveFailures++;
-                    this.lastSyncError = {
-                        error: error instanceof Error ? error : new Error(String(error)),
-                        timestamp: Date.now()
-                    };
-                    return false;
                 }
             }
         }
+        if (!success && lastError) {
+            console.error('[Metrics] All batch sync attempts failed');
+            this.consecutiveFailures++;
+            this.lastSyncError = {
+                error: lastError,
+                timestamp: Date.now()
+            };
+            // Show error notification for first few failures
+            if (this.consecutiveFailures <= 3) {
+                vscode.window.showErrorMessage(`Failed to sync metrics: ${lastError.message}`, { modal: false });
+            }
+        }
         return success;
+    }
+    updateRateLimitCounter() {
+        const now = Date.now();
+        // Remove timestamps older than the rate limit window
+        this.requestTimestamps = this.requestTimestamps.filter(timestamp => now - timestamp < MetricsService.RATE_LIMIT_WINDOW_MS);
+        // Check if we've exceeded the rate limit
+        if (this.requestTimestamps.length >= MetricsService.RATE_LIMIT_MAX_REQUESTS) {
+            const oldestRequest = this.requestTimestamps[0];
+            const timeUntilReset = (oldestRequest + MetricsService.RATE_LIMIT_WINDOW_MS) - now;
+            this.handleRateLimit(now + timeUntilReset);
+            return;
+        }
+        // Add current request timestamp
+        this.requestTimestamps.push(now);
+    }
+    handleRateLimit(resetTime) {
+        this.isRateLimited = true;
+        this.rateLimitResetTime = resetTime;
+        const remainingMs = resetTime - Date.now();
+        console.warn(`[Metrics] Rate limited - resuming at ${new Date(resetTime).toISOString()}`);
+        // Show a warning to the user if we're significantly rate limited
+        if (remainingMs > 30000) { // Only show for rate limits > 30 seconds
+            vscode.window.showWarningMessage(`Metrics sync rate limited. Will resume in ${Math.ceil(remainingMs / 1000)} seconds.`, { modal: false });
+        }
+        // Schedule a retry after the rate limit resets
+        setTimeout(() => {
+            this.isRateLimited = false;
+            this.syncWithBackend().catch(console.error);
+        }, remainingMs + 1000);
     }
     async syncWithBackend(force = false) {
         // Skip if already syncing
@@ -406,11 +375,9 @@ class MetricsService {
         }
         // Skip if no backend service
         if (!this.backendService) {
-            console.log('[Metrics] ⚠️  Backend service not available - cannot sync metrics');
-            console.log('[Metrics] Metrics will be collected locally but not sent to backend');
+            console.log('[Metrics] Backend service not available');
             return;
         }
-        console.log('[Metrics] 📤 Starting sync to backend, pending metrics:', this.pendingMetrics.length);
         // Check rate limiting
         if (this.isRateLimited) {
             if (Date.now() < this.rateLimitResetTime) {
@@ -472,15 +439,7 @@ class MetricsService {
                 const message = this.isRateLimited
                     ? 'Metrics sync rate limited. Will retry automatically.'
                     : `Failed to sync metrics: ${errorMessage}`;
-                // Show error in status bar
-                const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-                statusBarItem.text = '$(error) Sync error';
-                statusBarItem.tooltip = message;
-                statusBarItem.show();
-                // Auto-hide after 5 seconds
-                setTimeout(() => {
-                    statusBarItem.dispose();
-                }, 5000);
+                vscode.window.showErrorMessage(message, { modal: false });
             }
             // Schedule a retry with exponential backoff if not rate limited
             if (!this.isRateLimited) {
@@ -532,14 +491,7 @@ class MetricsService {
                     console.log('[Metrics] Successfully synced with backend');
                     // Show success notification only for forced syncs or after failures
                     if (force || attempt > 1) {
-                        // Show sync success in status bar
-                        const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-                        statusBarItem.text = '$(check) Metrics synced';
-                        statusBarItem.show();
-                        // Auto-hide after 3 seconds
-                        setTimeout(() => {
-                            statusBarItem.dispose();
-                        }, 3000);
+                        vscode.window.showInformationMessage('Metrics synced successfully', { modal: false });
                     }
                     break;
                 }
@@ -568,16 +520,11 @@ class MetricsService {
             console.error('[Metrics] All sync attempts failed:', error);
             // Only show error notification for forced syncs or first few failures
             if (force || this.consecutiveFailures <= 3) {
-                // Show error in status bar with retry option
-                const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-                statusBarItem.text = '$(error) Sync failed - Click to retry';
-                statusBarItem.tooltip = errorMessage;
-                statusBarItem.command = 'devtimetracker.forceSync';
-                statusBarItem.show();
-                // Auto-hide after 10 seconds
-                setTimeout(() => {
-                    statusBarItem.dispose();
-                }, 10000);
+                vscode.window.showErrorMessage(`Failed to sync metrics: ${errorMessage}`, 'Retry Now', 'Dismiss').then(selection => {
+                    if (selection === 'Retry Now') {
+                        this.forceSync();
+                    }
+                });
             }
             throw error; // Re-throw to be caught by forceSync if needed
         }
@@ -615,51 +562,52 @@ class MetricsService {
     getMetrics() {
         return this.metricsCollector.getMetrics();
     }
-    /**
-     * Mark user as active - tracking is enabled only during active periods
-     */
-    markActive() {
-        const now = Date.now();
-        this.lastActivityTime = now;
-        // Resume tracking if we were inactive
-        if (!this.isActive) {
-            this.isActive = true;
-            this.metricsCollector.resumeTracking();
-            console.log('[MetricsService] ✅ User active - tracking enabled');
-        }
-        // Update metrics
-        const metrics = this.metricsCollector.getMetrics();
-        if (metrics.productivity) {
-            const nowDate = new Date();
-            const lastUpdate = metrics.timestamp || nowDate;
-            const secondsActive = Math.floor((nowDate.getTime() - lastUpdate.getTime()) / 1000);
-            const currentHour = nowDate.getHours().toString().padStart(2, '0');
-            this.metricsCollector.updateMetrics({
-                timestamp: nowDate,
-                productivity: {
-                    ...metrics.productivity,
-                    focusTime: (metrics.productivity.focusTime || 0) + secondsActive,
-                    productiveHours: {
-                        ...metrics.productivity.productiveHours,
-                        [currentHour]: (metrics.productivity.productiveHours?.[currentHour] || 0) + secondsActive
-                    }
-                }
-            });
-        }
-    }
-    /**
-     * Mark user as inactive - tracking pauses immediately
-     */
-    markInactive() {
-        if (this.isActive) {
-            this.isActive = false;
-            this.metricsCollector.pauseTracking();
-            console.log('[MetricsService] ⏸️  User inactive - tracking paused');
-        }
-    }
-    // Kept for backward compatibility - redirects to markActive
     handleActivity() {
-        this.markActive();
+        const metrics = this.metricsCollector.getMetrics();
+        if (!metrics.productivity)
+            return;
+        // Update focus time (in seconds)
+        const now = new Date();
+        const lastUpdate = metrics.timestamp || now;
+        const secondsActive = Math.floor((now.getTime() - lastUpdate.getTime()) / 1000);
+        // Update productive hours (current hour)
+        const currentHour = now.getHours().toString().padStart(2, '0');
+        this.metricsCollector.updateMetrics({
+            timestamp: now,
+            productivity: {
+                ...metrics.productivity,
+                focusTime: (metrics.productivity.focusTime || 0) + secondsActive,
+                productiveHours: {
+                    ...metrics.productivity.productiveHours,
+                    [currentHour]: (metrics.productivity.productiveHours?.[currentHour] || 0) + secondsActive
+                }
+            }
+        });
+        this.lastActivityTime = Date.now();
+        if (this.isIdle) {
+            this.isIdle = false;
+            this.isTrackingPaused = false;
+            this.metricsCollector.resumeTracking();
+            console.log('Resumed tracking after idle period');
+        }
+        this.resetIdleTimer();
+    }
+    startIdleChecker() {
+        this.resetIdleTimer();
+    }
+    resetIdleTimer() {
+        if (this.idleTimer) {
+            clearTimeout(this.idleTimer);
+        }
+        this.idleTimer = setTimeout(() => this.handleIdleState(), MetricsService.IDLE_TIMEOUT_MS);
+    }
+    handleIdleState() {
+        if (!this.isIdle) {
+            this.isIdle = true;
+            this.isTrackingPaused = true;
+            this.metricsCollector.pauseTracking();
+            console.log('Paused tracking due to inactivity');
+        }
     }
     // Event Handlers
     // Note: The primary handleDocumentChange implementation is at the top of the file
@@ -679,6 +627,10 @@ class MetricsService {
         if (this.syncInterval) {
             clearInterval(this.syncInterval);
             this.syncInterval = null;
+        }
+        if (this.idleTimer) {
+            clearTimeout(this.idleTimer);
+            this.idleTimer = null;
         }
     }
 }

@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.StatusBarManager = void 0;
 const vscode = __importStar(require("vscode"));
-const MetricsService_1 = require("./services/MetricsService");
 class StatusBarManager {
     context;
     static instance;
@@ -72,10 +71,9 @@ class StatusBarManager {
             // Create status bar items with higher priority (lower number = higher priority)
             console.log('[StatusBar] Creating status bar items');
             this.statusBarItems = {
-                activity: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 5),
-                sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
-                todaySummary: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 3),
-                codeMetrics: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
+                activity: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
+                sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 3),
+                todaySummary: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
                 pomodoro: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1)
             };
             console.log('[StatusBar] Status bar items created');
@@ -85,26 +83,6 @@ class StatusBarManager {
             console.log('[StatusBar] Status bar items initialized');
             // Check for day change periodically (every 5 minutes)
             setInterval(() => this.checkForDayChange(), 5 * 60 * 1000);
-            // Listen for configuration changes
-            context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
-                if (e.affectsConfiguration('devtimetracker.pomodoro')) {
-                    console.log('[Pomodoro] Configuration changed, reloading...');
-                    this.loadPomodoroConfig();
-                    // If pomodoro is running, offer to restart
-                    if (this.isPomodoroRunning) {
-                        vscode.window.showInformationMessage('Pomodoro settings updated. Changes will apply to the next session.', 'Restart Now').then(selection => {
-                            if (selection === 'Restart Now') {
-                                this.stopPomodoro();
-                                this.startPomodoro();
-                            }
-                        });
-                    }
-                    else {
-                        // Update the display with new config values
-                        this.updatePomodoroDisplay();
-                    }
-                }
-            }));
         }
         catch (error) {
             console.error('[StatusBar] Error during initialization:', error);
@@ -182,15 +160,8 @@ class StatusBarManager {
             this.statusBarItems.todaySummary.command = 'devtimetracker.showStatus';
             this.statusBarItems.todaySummary.show();
             console.log('[StatusBar] Today\'s summary initialized');
-            // Code metrics
-            this.statusBarItems.codeMetrics.text = '$(graph) Lines: +0/-0';
-            this.statusBarItems.codeMetrics.tooltip = 'Code metrics for today';
-            this.statusBarItems.codeMetrics.command = 'devtimetracker.showStatus';
-            this.statusBarItems.codeMetrics.show();
-            console.log('[StatusBar] Code metrics initialized');
-            // Pomodoro timer - use actual config value
-            const workMins = this.pomodoroConfig.workDuration;
-            this.statusBarItems.pomodoro.text = `$(clock) Pomodoro: ${workMins.toString().padStart(2, '0')}:00`;
+            // Pomodoro timer
+            this.statusBarItems.pomodoro.text = '$(clock) Pomodoro: 25:00';
             this.statusBarItems.pomodoro.tooltip = 'Click to start Pomodoro';
             this.statusBarItems.pomodoro.command = 'devtimetracker.togglePomodoro';
             this.statusBarItems.pomodoro.show();
@@ -270,29 +241,11 @@ class StatusBarManager {
                 // Update today's summary
                 this.statusBarItems.todaySummary.text = `$(calendar) Today: ${timeStr}`;
                 this.statusBarItems.todaySummary.tooltip = `Total coding time today: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
-                // Update code metrics
-                this.updateCodeMetrics();
             }
             catch (error) {
                 console.error('[StatusBar] Error updating session timer:', error);
             }
         }, 1000);
-    }
-    updateCodeMetrics() {
-        try {
-            const metricsService = MetricsService_1.MetricsService.getInstance();
-            const metrics = metricsService.getMetrics();
-            if (metrics && metrics.code) {
-                const linesAdded = metrics.code.lines.added || 0;
-                const linesRemoved = metrics.code.lines.removed || 0;
-                const fileTypes = Object.keys(metrics.code.fileTypes || {}).length;
-                this.statusBarItems.codeMetrics.text = `$(graph) Lines: +${linesAdded}/-${linesRemoved} | Files: ${fileTypes} types`;
-                this.statusBarItems.codeMetrics.tooltip = `Code Metrics:\nLines Added: ${linesAdded}\nLines Removed: ${linesRemoved}\nFile Types: ${fileTypes}`;
-            }
-        }
-        catch (error) {
-            // Metrics service might not be initialized yet, that's okay
-        }
     }
     updateSessionTimer() {
         if (!this.sessionStartTime)
@@ -336,9 +289,11 @@ class StatusBarManager {
                     // Reset session start time to today
                     this.sessionStartTime = new Date();
                     this.idleTime = 0;
-                    // Update the display to reflect the reset
-                    this.updateSessionTimer();
                 }
+                // Update the display to reflect the reset
+                this.updateSessionTimer();
+                // Show a notification about the reset
+                vscode.window.showInformationMessage('A new day has started. Your coding session timer has been reset.');
             }
         }
         catch (error) {
@@ -360,7 +315,6 @@ class StatusBarManager {
     }
     loadPomodoroConfig() {
         const config = vscode.workspace.getConfiguration('devtimetracker.pomodoro');
-        const previousWorkDuration = this.pomodoroConfig.workDuration;
         this.pomodoroConfig = {
             workDuration: config.get('workDuration') || 25,
             shortBreakDuration: config.get('shortBreakDuration') || 5,
@@ -369,10 +323,6 @@ class StatusBarManager {
             autoStartNext: config.get('autoStartNextSession') !== false
         };
         console.log('[Pomodoro] Loaded config:', this.pomodoroConfig);
-        // If config changed and Pomodoro is not running, reset the display
-        if (!this.isPomodoroRunning && previousWorkDuration !== this.pomodoroConfig.workDuration) {
-            this.pomodoroTimeLeft = this.pomodoroConfig.workDuration * 60;
-        }
     }
     startPomodoro() {
         this.isPomodoroRunning = true;
@@ -440,14 +390,7 @@ class StatusBarManager {
             // Break ended, start a work session
             this.isBreakTime = false;
             const message = 'Break time is over! Time to focus.';
-            // Show notification in status bar instead of popup
-            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-            statusBarItem.text = `$(info) ${message}`;
-            statusBarItem.show();
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusBarItem.dispose();
-            }, 5000);
+            vscode.window.showInformationMessage(message);
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();
             }
@@ -467,14 +410,7 @@ class StatusBarManager {
             const message = isLongBreak
                 ? `Pomodoro session complete! Time for a long ${breakDuration}-minute break.`
                 : `Pomodoro session complete! Time for a ${breakDuration}-minute break.`;
-            // Show notification in status bar instead of popup
-            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-            statusBarItem.text = `$(info) ${message}`;
-            statusBarItem.show();
-            // Auto-hide after 5 seconds
-            setTimeout(() => {
-                statusBarItem.dispose();
-            }, 5000);
+            vscode.window.showInformationMessage(message);
             if (this.pomodoroConfig.autoStartNext) {
                 this.startPomodoro();
             }

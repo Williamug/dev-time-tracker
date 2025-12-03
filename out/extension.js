@@ -45,45 +45,30 @@ const GitService_1 = require("./services/GitService");
 const HealthService_1 = require("./services/HealthService");
 const BackendService_1 = require("./services/BackendService");
 const CustomReminderService_1 = require("./services/CustomReminderService");
-const DiffService_1 = require("./services/DiffService");
 const manageCustomReminders_1 = require("./commands/manageCustomReminders");
 // Track user activity state
 let lastActivityTime = Date.now();
-const INACTIVITY_THRESHOLD = 300000; // 5 minutes (production)
+const INACTIVITY_THRESHOLD = 5000; // 5 seconds for testing (change to 300000 for 5 minutes in production)
 let activityCheckInterval = null;
 let statusBarManager = null;
-let diffService = null;
-let eventBuffer = null;
-let lastActivityLog = 0; // Throttle activity logs
 // Update activity status based on user interaction
 function updateActivityStatus() {
     if (!statusBarManager)
         return;
     const now = Date.now();
     const isActive = now - lastActivityTime < INACTIVITY_THRESHOLD;
-    console.log(`[Activity] ${isActive ? 'Active' : 'Idle'} (Last activity: ${new Date(lastActivityTime).toLocaleTimeString()}, ${Math.floor((now - lastActivityTime) / 1000)}s ago)`);
+    console.log(`[Activity] ${isActive ? 'Active' : 'Idle'} (${new Date(lastActivityTime).toLocaleTimeString()})`);
     statusBarManager.updateActivityStatus(isActive);
 }
 // Track user activity
 function trackUserActivity(reason) {
-    const now = Date.now();
     const oldTime = lastActivityTime;
-    lastActivityTime = now;
-    // Only log activity every 5 seconds to reduce noise
-    if (now - lastActivityLog > 5000) {
-        const timeSinceLastActivity = lastActivityTime - oldTime;
-        console.log(`[Activity] Activity detected (${reason}) | Time since last: ${timeSinceLastActivity}ms | New lastActivityTime: ${new Date(lastActivityTime).toLocaleTimeString()}`);
-        lastActivityLog = now;
-    }
+    lastActivityTime = Date.now();
+    console.log(`[Activity] Activity detected (${reason}) - Last: ${new Date(oldTime).toLocaleTimeString()}, Now: ${new Date(lastActivityTime).toLocaleTimeString()}`);
     updateActivityStatus();
 }
 async function activate(ctx) {
     console.log('[Extension] Activating Dev Time Tracker...');
-    console.log('[Extension] Extension context:', ctx);
-    console.log('[Extension] Extension path:', ctx.extensionPath);
-    // Log available commands for debugging
-    const availableCommands = await vscode.commands.getCommands(true);
-    console.log('[Extension] Available commands:', availableCommands.filter((cmd) => cmd.startsWith('devtimetracker.')));
     const cfg = vscode.workspace.getConfiguration('devtimetracker');
     const apiUrl = cfg.get('apiUrl');
     const apiToken = cfg.get('apiToken');
@@ -94,370 +79,201 @@ async function activate(ctx) {
     let gitService = null;
     let healthService = null;
     let customReminderService = null;
-    // Register health reminder commands FIRST (before HealthService creates status bar items)
-    console.log('[Extension] Registering health reminder commands...');
-    ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.start202020Timer', async () => {
-        await healthService?.start202020Timer();
-    }), vscode.commands.registerCommand('devtimetracker.acknowledgePosture', () => {
-        vscode.window.showInformationMessage('✓ Posture checked! Keep sitting up straight.');
-    }), vscode.commands.registerCommand('devtimetracker.acknowledgeEyeStrain', async () => {
-        await healthService?.start202020Timer();
-    }), vscode.commands.registerCommand('devtimetracker.startBreak', () => {
-        vscode.window.showInformationMessage('💪 Taking a break! Stand up, stretch, and rest your eyes.');
-    }), vscode.commands.registerCommand('devtimetracker.breakReminder', () => {
-        // Placeholder for status bar click
-    }), vscode.commands.registerCommand('devtimetracker.postureReminder', () => {
-        // Placeholder for status bar click
-    }), vscode.commands.registerCommand('devtimetracker.eyeStrainReminder', () => {
-        // Placeholder for status bar click
-    }));
-    console.log('[Extension] Health reminder commands registered');
-    // Initialize backend service FIRST if configured (so other services can use it)
-    console.log('[Extension] Checking backend configuration...', { apiUrl, apiToken: apiToken ? '***' + apiToken.slice(-8) : 'none' });
+    // Initialize backend service if configured
     if (apiUrl) {
-        console.log('[Extension] API URL found, initializing BackendService...');
         try {
             backendService = BackendService_1.BackendService.getInstance();
-            console.log('[Extension] BackendService instance created, initializing...');
             const initialized = await backendService.initialize();
             if (initialized) {
-                console.log('[Backend] ✅ Successfully connected to backend service at', apiUrl);
-                vscode.window.showInformationMessage(`✅ Connected to backend: ${apiUrl}`);
+                console.log('[Backend] Successfully connected to backend service');
+                // Sync settings from backend
+                try {
+                    const synced = await backendService.syncSettings();
+                    if (synced) {
+                        console.log('[Backend] Successfully synced settings from backend');
+                    }
+                }
+                catch (syncError) {
+                    console.error('[Backend] Failed to sync settings:', syncError);
+                }
+                // Register configuration change listener
+                vscode.workspace.onDidChangeConfiguration(async (e) => {
+                    if (e.affectsConfiguration('devtimetracker')) {
+                        console.log('[Backend] Configuration changed, reinitializing...');
+                        await backendService?.initialize();
+                        // Resync settings after reinitialization
+                        try {
+                            await backendService?.syncSettings();
+                        }
+                        catch (syncError) {
+                            console.error('[Backend] Failed to resync settings:', syncError);
+                        }
+                    }
+                });
+                // Initialize services with backend support
+                metricsService = MetricsService_1.MetricsService.getInstance(backendService);
+                gitService = GitService_1.GitService.getInstance(backendService);
+                healthService = HealthService_1.HealthService.getInstance(backendService, ctx);
+                customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
+            }
+            else {
+                throw new Error('Backend initialization failed');
             }
         }
         catch (error) {
-            console.error('[Backend] ❌ Error initializing backend service:', error);
-            vscode.window.showWarningMessage(`❌ Failed to connect to backend: ${error}`);
+            console.error('[Backend] Failed to initialize:', error);
+            vscode.window.showWarningMessage('Failed to connect to Dev Time Tracker backend. Running in local mode.');
+            // Fall back to local mode
+            metricsService = MetricsService_1.MetricsService.getInstance();
+            gitService = GitService_1.GitService.getInstance();
+            healthService = HealthService_1.HealthService.getInstance(undefined, ctx);
+            customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
         }
     }
     else {
-        console.log('[Extension] ⚠️  No API URL configured - backend service disabled');
-        vscode.window.showWarningMessage('Dev Time Tracker: No API URL configured. Backend features disabled.');
+        console.log('[Backend] No API URL configured, running in local mode');
+        vscode.window.showInformationMessage('Dev Time Tracker is running in local mode. Configure backend in settings for full features.');
+        // Initialize services without backend
+        metricsService = MetricsService_1.MetricsService.getInstance();
+        gitService = GitService_1.GitService.getInstance();
+        healthService = HealthService_1.HealthService.getInstance();
+        customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
     }
-    // Initialize HealthService (it may use backend if available)
-    console.log('[Extension] ===== STARTING HEALTH SERVICE INITIALIZATION =====');
+    // Initialize status bar manager
+    statusBarManager = statusBarManager_1.StatusBarManager.getInstance(ctx);
+    if (!statusBarManager) {
+        console.error('[Extension] Failed to initialize StatusBarManager');
+        return;
+    }
     try {
-        // Initialize HealthService
-        console.log('[Extension] Creating HealthService instance...');
-        healthService = HealthService_1.HealthService.getInstance(backendService || undefined, ctx);
-        console.log('[Extension] ✓ HealthService instance created');
-        // Verify HealthStatusBar instance
-        if (!healthService.healthStatusBar) {
-            console.error('[Extension] ✗ HealthStatusBar instance is null/undefined!');
+        // Initialize session manager and event buffer only if API URL is provided
+        if (apiUrl) {
+            const sessionManager = new sessionManager_1.SessionManager(apiUrl, apiToken || '', ctx);
+            const sessionId = await sessionManager.startSession();
+            const eventBuffer = new buffer_1.EventBuffer(apiUrl, apiToken || '', sessionId);
+            eventBuffer.start();
+            ctx.subscriptions.push({ dispose: () => eventBuffer.stop() });
+            const listener = new eventListener_1.EventListener(ctx, eventBuffer, sessionId);
+            listener.start();
+            console.log('[Extension] Backend integration initialized');
         }
         else {
-            console.log('[Extension] ✓ HealthStatusBar instance found');
-            // Try to force show status bar items
-            const types = ['break', 'posture', 'eyeStrain'];
-            for (const type of types) {
-                try {
-                    console.log(`[Extension] Attempting to show ${type} status bar item...`);
-                    // Use type assertion to access the methods
-                    const statusBar = healthService.healthStatusBar;
-                    const methodName = `show${type.charAt(0).toUpperCase() + type.slice(1)}Reminder`;
-                    if (typeof statusBar[methodName] === 'function') {
-                        statusBar[methodName](1);
-                        console.log(`[Extension] ✓ ${type} status bar item shown`);
-                    }
-                    else {
-                        console.error(`[Extension] ✗ Method ${methodName} not found on HealthStatusBar`);
-                    }
-                }
-                catch (error) {
-                    console.error(`[Extension] ✗ Error showing ${type} status bar item:`, error);
-                }
-            }
+            console.log('[Extension] Running in local mode - no backend integration');
         }
     }
     catch (error) {
-        console.error('[Extension] Error initializing HealthService:', error);
+        console.error('[Extension] Error initializing backend integration:', error);
+        vscode.window.showWarningMessage('Dev Time Tracker: Running in local mode - backend integration disabled');
     }
-    // Initialize other services with backend (if available)
-    if (backendService) {
-        console.log('[Extension] Initializing services with backend support...');
-        // Register configuration change listener
-        let configChangeTimeout = null;
-        vscode.workspace.onDidChangeConfiguration(async (e) => {
-            if (e.affectsConfiguration('devtimetracker.apiUrl') || e.affectsConfiguration('devtimetracker.apiToken')) {
-                // Only reinitialize if API connection settings changed
-                console.log('[Backend] API connection settings changed, reinitializing...');
-                await backendService?.initialize();
-            }
-            else if (e.affectsConfiguration('devtimetracker.tracking.enableDiffCapture')) {
-                // Handle diff tracking toggle
-                const cfg = vscode.workspace.getConfiguration('devtimetracker');
-                const enableDiffCapture = cfg.get('tracking.enableDiffCapture', true);
-                if (enableDiffCapture) {
-                    // Enable diff tracking
-                    if (!diffService) {
-                        diffService = new DiffService_1.DiffService();
-                        diffService.start();
-                        eventBuffer?.setDiffService(diffService);
-                        console.log('[Extension] DiffService enabled via settings');
-                    }
-                }
-                else {
-                    // Disable diff tracking
-                    if (diffService) {
-                        diffService.dispose();
-                        diffService = null;
-                        eventBuffer?.setDiffService(null);
-                        console.log('[Extension] DiffService disabled via settings');
-                    }
-                }
-            }
-            else if (e.affectsConfiguration('devtimetracker')) {
-                // Push settings TO backend after a short delay (debounce)
-                if (configChangeTimeout) {
-                    clearTimeout(configChangeTimeout);
-                }
-                configChangeTimeout = setTimeout(async () => {
-                    console.log('[Backend] Settings changed, pushing to backend...');
-                    try {
-                        const config = vscode.workspace.getConfiguration('devtimetracker');
-                        const settingsKeys = ['pomodoro', 'health', 'metrics'];
-                        for (const key of settingsKeys) {
-                            const section = config.get(key);
-                            if (section && typeof section === 'object') {
-                                for (const [subKey, value] of Object.entries(section)) {
-                                    await backendService?.updateExtensionSetting(`${key}.${subKey}`, value);
-                                }
-                            }
-                        }
-                        console.log('[Backend] Settings pushed successfully');
-                    }
-                    catch (error) {
-                        console.error('[Backend] Failed to push settings:', error);
-                    }
-                }, 1000); // 1 second debounce
-            }
-        });
-        // Initialize services with backend support
-        metricsService = MetricsService_1.MetricsService.getInstance(backendService);
-        gitService = GitService_1.GitService.getInstance(backendService);
-        // Initialize custom reminders with metrics integration
-        if (metricsService) {
-            customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx, metricsService);
-        }
-    }
-    else {
-        console.log('[Extension] Initializing services WITHOUT backend support...');
-        metricsService = MetricsService_1.MetricsService.getInstance(undefined);
-        gitService = GitService_1.GitService.getInstance(undefined);
-    }
-    // Register showStatus command BEFORE StatusBarManager (so it exists when status bar items are created)
-    ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.showStatus', () => {
-        if (!statusBarManager) {
-            vscode.window.showInformationMessage('Dev Time Tracker is not initialized yet');
-            return;
-        }
-        const sessionTime = statusBarManager.getSessionTime();
-        const todayTime = statusBarManager.getTodayTime();
-        const metrics = MetricsService_1.MetricsService.getInstance().getMetrics();
-        // Build status message
-        let message = `Session: ${sessionTime} | Today: ${todayTime}`;
-        if (metrics.code) {
-            const linesAdded = metrics.code.lines?.added || 0;
-            const linesRemoved = metrics.code.lines?.removed || 0;
-            const fileTypes = Object.keys(metrics.code.fileTypes || {}).length;
-            message += ` | Lines: +${linesAdded}/-${linesRemoved} | Files: ${fileTypes} types`;
-        }
-        vscode.window.showInformationMessage(message);
-    }));
-    // Initialize status bar manager as a singleton
-    statusBarManager = statusBarManager_1.StatusBarManager.getInstance(ctx);
-    // Trigger initial activity to start the session
-    if (statusBarManager) {
-        statusBarManager.updateActivityStatus(true);
-        console.log('[Extension] Initial activity status set to active');
-        // Start activity check interval
-        activityCheckInterval = setInterval(() => {
-            updateActivityStatus();
-        }, 1000); // Check every second
-        console.log('[Extension] Activity check interval started');
-    }
-    // Initialize session manager
-    const sessionManager = new sessionManager_1.SessionManager(apiUrl || '', apiToken || '', ctx);
-    const sessionId = await sessionManager.startSession();
-    // Initialize diff service (conditionally based on settings)
-    const enableDiffCapture = cfg.get('tracking.enableDiffCapture', true);
-    if (enableDiffCapture) {
-        diffService = new DiffService_1.DiffService();
-        diffService.start();
-        console.log('[Extension] DiffService initialized (enabled)');
-    }
-    else {
-        console.log('[Extension] DiffService disabled by user settings');
-    }
-    // Initialize event buffer and listener with diff service
-    eventBuffer = new buffer_1.EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService);
-    const listener = new eventListener_1.EventListener(ctx, eventBuffer, sessionId);
-    listener.start();
-    // Start the event buffer
-    eventBuffer.start();
-    // Set up activity tracking
+    // Set up event listeners for user activity
+    console.log('[Extension] Setting up activity listeners...');
+    // Forward activity events to metrics service
+    const metrics = MetricsService_1.MetricsService.getInstance();
+    const trackActivity = (type) => {
+        console.log(`[Activity] ${type}`);
+        metrics.handleActivity();
+    };
     const activityEvents = [
-        // Editor events - Track typing and content changes
+        // Editor events
         vscode.window.onDidChangeActiveTextEditor((e) => {
             console.log('[Activity] Active editor changed:', e?.document.uri.fsPath);
-            trackUserActivity('editor changed');
+            trackUserActivity('editor change');
+        }),
+        vscode.window.onDidChangeTextEditorSelection((e) => {
+            console.log('[Activity] Text selection changed in:', e.textEditor.document.uri.fsPath);
+            trackUserActivity('selection change');
+        }),
+        vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
+            console.log('[Activity] Visible ranges changed in:', e.textEditor.document.uri.fsPath);
+            trackUserActivity('visible ranges change');
         }),
         vscode.workspace.onDidChangeTextDocument((e) => {
-            if (e.contentChanges.length > 0) {
-                trackUserActivity('document changed');
-            }
+            console.log('[Activity] Document changed:', e.document.uri.fsPath);
+            trackUserActivity('document change');
         }),
-        // Selection changes - detect mouse clicks and keyboard navigation
-        vscode.window.onDidChangeTextEditorSelection((e) => {
-            trackUserActivity('selection changed');
-        }),
-        // Visible ranges changed - detect scrolling
-        vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-            trackUserActivity('scrolling');
+        // Window focus events
+        vscode.window.onDidChangeWindowState((e) => {
+            console.log(`[Activity] Window focus changed: ${e.focused ? 'focused' : 'unfocused'}`);
+            if (e.focused)
+                trackUserActivity('window focus');
         }),
         // Terminal events
-        vscode.window.onDidChangeTerminalState(() => {
-            trackUserActivity('terminal state changed');
+        vscode.window.onDidChangeActiveTerminal((terminal) => {
+            console.log('[Activity] Active terminal changed:', terminal?.name);
+            trackUserActivity('terminal change');
         }),
-        vscode.window.onDidOpenTerminal(() => {
-            trackUserActivity('terminal opened');
+        // Debug events
+        vscode.debug.onDidStartDebugSession(() => {
+            console.log('[Activity] Debug session started');
+            trackUserActivity('debug session start');
         }),
-        vscode.window.onDidCloseTerminal(() => {
-            trackUserActivity('terminal closed');
+        // File system events
+        vscode.workspace.onDidCreateFiles((e) => {
+            console.log('[Activity] Files created:', e.files.map(f => f.fsPath));
+            trackUserActivity('file created');
         }),
-        // Window events
-        vscode.window.onDidChangeWindowState((e) => {
-            if (e.focused) {
-                trackUserActivity('window focus changed');
-            }
-        }),
-        // Workspace events
-        vscode.workspace.onDidOpenTextDocument(() => {
-            trackUserActivity('document opened');
-        }),
-        vscode.workspace.onDidCloseTextDocument(() => {
-            trackUserActivity('document closed');
-        }),
-        vscode.workspace.onDidSaveTextDocument(() => {
-            trackUserActivity('document saved');
-        }),
-        // View column changes - detect panel/sidebar interactions
-        vscode.window.onDidChangeTextEditorViewColumn(() => {
-            trackUserActivity('view column changed');
+        // Status bar click command
+        vscode.commands.registerCommand('devtimetracker.forceActive', () => {
+            console.log('[Activity] Manual activation triggered');
+            trackUserActivity('manual activation');
         })
     ];
     // Add activity event listeners to subscriptions
     activityEvents.forEach(disposable => ctx.subscriptions.push(disposable));
-    // Clean up on deactivation
-    ctx.subscriptions.push({
-        dispose: () => {
-            if (activityCheckInterval) {
-                clearInterval(activityCheckInterval);
-            }
-            sessionManager_1.SessionManager.endSession();
-            MetricsService_1.MetricsService.getInstance().dispose();
-            HealthService_1.HealthService.getInstance().dispose();
+    console.log('[Extension] Activity listeners registered');
+    // Initial activity check
+    trackUserActivity('initial activation');
+    // Update activity status more frequently for better responsiveness
+    activityCheckInterval = setInterval(() => {
+        updateActivityStatus();
+    }, 1000); // Check every second
+    ctx.subscriptions.push(new vscode.Disposable(() => {
+        activityEvents.forEach(disposable => disposable.dispose());
+        if (statusBarManager) {
+            statusBarManager.dispose();
         }
-    });
-    // Register other commands
-    const disposables = [];
-    // 2. Toggle Pomodoro command
-    disposables.push(vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-        statusBarManager?.togglePomodoro();
+        // Clean up services
+        MetricsService_1.MetricsService.getInstance().dispose();
+        GitService_1.GitService.getInstance().dispose();
+        HealthService_1.HealthService.getInstance().dispose();
     }));
-    // 2b. Test notifications command (for debugging)
-    disposables.push(vscode.commands.registerCommand('devtimetracker.testNotifications', async () => {
-        vscode.window.showInformationMessage('Testing notifications - this should appear in bottom-right corner', 'OK');
-        console.log('[Extension] Test notification sent');
-        // Also test backend connection
-        if (backendService) {
-            try {
-                await backendService.sendEvent('test', { message: 'Test from extension' });
-                vscode.window.showInformationMessage('✓ Backend connection working!');
+    // Register commands
+    const commands = [
+        vscode.commands.registerCommand('devtimetracker.showStatus', () => {
+            if (!statusBarManager)
+                return;
+            const sessionTime = statusBarManager.getSessionTime();
+            const todayTime = statusBarManager.getTodayTime();
+            const metrics = MetricsService_1.MetricsService.getInstance().getMetrics();
+            let message = `Current Session: ${sessionTime}\n` +
+                `Today's Total: ${todayTime}`;
+            if (metrics.code) {
+                message += `\n\nCode Metrics:`;
+                message += `\n- Lines: +${metrics.code.lines.added}/-${metrics.code.lines.removed}`;
+                message += `\n- Files: ${Object.keys(metrics.code.fileTypes).length} types`;
             }
-            catch (error) {
-                vscode.window.showErrorMessage(`✗ Backend connection failed: ${error}`);
+            if (metrics.project?.currentProject) {
+                message += `\n\nCurrent Project: ${metrics.project.currentProject}`;
             }
-        }
-        else {
-            vscode.window.showWarningMessage('Backend service not initialized');
-        }
-    }));
-    // Health reminder commands already registered at the top of activate()
-    // 2c. Toggle diff capture command
-    disposables.push(vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
-        const cfg = vscode.workspace.getConfiguration('devtimetracker');
-        const currentValue = cfg.get('tracking.enableDiffCapture', true);
-        const newValue = !currentValue;
-        await cfg.update('tracking.enableDiffCapture', newValue, vscode.ConfigurationTarget.Global);
-        // Restart or stop DiffService based on new value
-        if (newValue) {
-            // Enable diff tracking
-            if (!diffService) {
-                diffService = new DiffService_1.DiffService();
-                diffService.start();
-                eventBuffer?.setDiffService(diffService);
-            }
-            vscode.window.showInformationMessage('✓ Code diff tracking enabled');
-        }
-        else {
-            // Disable diff tracking
-            if (diffService) {
-                diffService.dispose();
-                diffService = null;
-                eventBuffer?.setDiffService(null);
-            }
-            vscode.window.showInformationMessage('Code diff tracking disabled (line counts only)');
-        }
-    }));
-    // 3. Add custom reminder command
-    disposables.push(vscode.commands.registerCommand('devtimetracker.addCustomReminder', async () => {
-        const customReminderService = CustomReminderService_1.CustomReminderService.getInstance(ctx);
-        if (!customReminderService) {
-            const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-            statusBarItem.text = '$(error) Reminder service not available';
-            statusBarItem.show();
-            setTimeout(() => statusBarItem.dispose(), 5000);
-            return;
-        }
-        // Show status bar message instead of popup
-        const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-        statusBarItem.text = '$(error) Reminder creation not available';
-        statusBarItem.tooltip = 'This feature requires popup dialogs which are disabled in this version.';
-        statusBarItem.show();
-        // Auto-hide after 5 seconds
-        setTimeout(() => statusBarItem.dispose(), 5000);
-        return;
-    }));
-    // Register all disposables with the extension context
-    disposables.forEach(disposable => ctx.subscriptions.push(disposable));
+            vscode.window.showInformationMessage(message);
+        }),
+        vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
+            statusBarManager?.togglePomodoro();
+        }),
+        vscode.commands.registerCommand('devtimetracker.manageCustomReminders', () => {
+            vscode.commands.executeCommand('devtimetracker.manageCustomReminders');
+        }),
+        vscode.commands.registerCommand('devtimetracker.addCustomReminder', () => {
+            vscode.commands.executeCommand('devtimetracker.addCustomReminder');
+        })
+    ];
     // Register custom reminder commands
     (0, manageCustomReminders_1.registerCustomReminderCommands)(ctx);
+    ctx.subscriptions.push(...commands);
     // Initial update of activity status
     updateActivityStatus();
-    // Log successful activation
-    console.log('[Extension] Dev Time Tracker activated successfully');
-    // Return the public API if needed
-    return {
-    // Add any public API methods here
-    };
 }
 async function deactivate() {
-    console.log('[Extension] Deactivating Dev Time Tracker');
-    // Clear activity check interval
-    if (activityCheckInterval) {
-        clearInterval(activityCheckInterval);
-        activityCheckInterval = null;
-    }
-    // Dispose of services
-    MetricsService_1.MetricsService.getInstance().dispose();
-    HealthService_1.HealthService.getInstance().dispose();
-    CustomReminderService_1.CustomReminderService.getInstance().dispose();
-    if (diffService) {
-        diffService.dispose();
-        diffService = null;
-    }
-    // End current session
     await sessionManager_1.SessionManager.endSession();
 }
 //# sourceMappingURL=extension.js.map

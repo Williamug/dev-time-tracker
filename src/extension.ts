@@ -8,7 +8,6 @@ import { GitService } from './services/GitService';
 import { HealthService } from './services/HealthService';
 import { BackendService } from './services/BackendService';
 import { CustomReminderService } from './services/CustomReminderService';
-import { DiffService } from './services/DiffService';
 import { registerCustomReminderCommands } from './commands/manageCustomReminders';
 import { ICustomReminder } from './models/CustomReminder';
 
@@ -17,9 +16,6 @@ let lastActivityTime = Date.now();
 const INACTIVITY_THRESHOLD = 300000; // 5 minutes (production)
 let activityCheckInterval: NodeJS.Timeout | null = null;
 let statusBarManager: StatusBarManager | null = null;
-let diffService: DiffService | null = null;
-let eventBuffer: EventBuffer | null = null;
-let lastActivityLog = 0; // Throttle activity logs
 
 // Update activity status based on user interaction
 function updateActivityStatus() {
@@ -33,17 +29,9 @@ function updateActivityStatus() {
 
 // Track user activity
 function trackUserActivity(reason: string) {
-  const now = Date.now();
   const oldTime = lastActivityTime;
-  lastActivityTime = now;
-
-  // Only log activity every 5 seconds to reduce noise
-  if (now - lastActivityLog > 5000) {
-    const timeSinceLastActivity = lastActivityTime - oldTime;
-    console.log(`[Activity] Activity detected (${reason}) | Time since last: ${timeSinceLastActivity}ms | New lastActivityTime: ${new Date(lastActivityTime).toLocaleTimeString()}`);
-    lastActivityLog = now;
-  }
-
+  lastActivityTime = Date.now();
+  console.log(`[Activity] Activity detected (${reason})`);
   updateActivityStatus();
 }
 
@@ -169,28 +157,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
         // Only reinitialize if API connection settings changed
         console.log('[Backend] API connection settings changed, reinitializing...');
         await backendService?.initialize();
-      } else if (e.affectsConfiguration('devtimetracker.tracking.enableDiffCapture')) {
-        // Handle diff tracking toggle
-        const cfg = vscode.workspace.getConfiguration('devtimetracker');
-        const enableDiffCapture = cfg.get<boolean>('tracking.enableDiffCapture', true);
-
-        if (enableDiffCapture) {
-          // Enable diff tracking
-          if (!diffService) {
-            diffService = new DiffService();
-            diffService.start();
-            eventBuffer?.setDiffService(diffService);
-            console.log('[Extension] DiffService enabled via settings');
-          }
-        } else {
-          // Disable diff tracking
-          if (diffService) {
-            diffService.dispose();
-            diffService = null;
-            eventBuffer?.setDiffService(null);
-            console.log('[Extension] DiffService disabled via settings');
-          }
-        }
       } else if (e.affectsConfiguration('devtimetracker')) {
         // Push settings TO backend after a short delay (debounce)
         if (configChangeTimeout) {
@@ -275,18 +241,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const sessionManager = new SessionManager(apiUrl || '', apiToken || '', ctx);
   const sessionId = await sessionManager.startSession();
 
-  // Initialize diff service (conditionally based on settings)
-  const enableDiffCapture = cfg.get<boolean>('tracking.enableDiffCapture', true);
-  if (enableDiffCapture) {
-    diffService = new DiffService();
-    diffService.start();
-    console.log('[Extension] DiffService initialized (enabled)');
-  } else {
-    console.log('[Extension] DiffService disabled by user settings');
-  }
-
-  // Initialize event buffer and listener with diff service
-  eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService);
+  // Initialize event buffer and listener
+  const eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId);
   const listener = new EventListener(ctx, eventBuffer, sessionId);
   listener.start();
 
@@ -399,34 +355,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   // Health reminder commands already registered at the top of activate()
 
-  // 2c. Toggle diff capture command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
-    const cfg = vscode.workspace.getConfiguration('devtimetracker');
-    const currentValue = cfg.get<boolean>('tracking.enableDiffCapture', true);
-    const newValue = !currentValue;
-
-    await cfg.update('tracking.enableDiffCapture', newValue, vscode.ConfigurationTarget.Global);
-
-    // Restart or stop DiffService based on new value
-    if (newValue) {
-      // Enable diff tracking
-      if (!diffService) {
-        diffService = new DiffService();
-        diffService.start();
-        eventBuffer?.setDiffService(diffService);
-      }
-      vscode.window.showInformationMessage('✓ Code diff tracking enabled');
-    } else {
-      // Disable diff tracking
-      if (diffService) {
-        diffService.dispose();
-        diffService = null;
-        eventBuffer?.setDiffService(null);
-      }
-      vscode.window.showInformationMessage('Code diff tracking disabled (line counts only)');
-    }
-  }));
-
   // 3. Add custom reminder command
   disposables.push(vscode.commands.registerCommand('devtimetracker.addCustomReminder', async () => {
     const customReminderService = CustomReminderService.getInstance(ctx);
@@ -480,11 +408,6 @@ export async function deactivate() {
   MetricsService.getInstance().dispose();
   HealthService.getInstance().dispose();
   CustomReminderService.getInstance().dispose();
-
-  if (diffService) {
-    diffService.dispose();
-    diffService = null;
-  }
 
   // End current session
   await SessionManager.endSession();
