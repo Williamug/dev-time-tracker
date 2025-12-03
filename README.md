@@ -15,6 +15,11 @@ Dev Time Tracker is an extension that helps developers track their productivity 
 - Coding streak tracking
 - Git integration for commit statistics
 - Code metrics (lines added/removed, file types)
+- **Diff tracking**: Captures actual code changes in Git-style format
+  - Line-by-line change tracking
+  - Added/removed/modified lines with context
+  - Unified diff format for easy review
+  - Available in the web dashboard activity details
 
 ### Health & Wellness
 - Break reminders to prevent burnout
