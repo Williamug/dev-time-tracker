@@ -48,6 +48,9 @@ class BackendService {
     constructor() {
         this.config = vscode.workspace.getConfiguration('devtimetracker');
         const apiUrl = this.config.get('apiUrl');
+        const apiToken = this.config.get('apiToken');
+        console.log('[BackendService] Constructor - API URL:', apiUrl);
+        console.log('[BackendService] Constructor - API Token (first 10 chars):', apiToken?.substring(0, 10) + '...');
         if (!apiUrl) {
             throw new Error('API URL is not configured. Please set devtimetracker.apiUrl in your settings.');
         }
@@ -67,41 +70,52 @@ class BackendService {
             const token = this.config.get('apiToken');
             if (token) {
                 config.headers.Authorization = `Bearer ${token}`;
+                console.log('[BackendService] Using token:', token?.toString().substring(0, 10) + '...');
+            }
+            else {
+                console.warn('[BackendService] No API token configured!');
             }
             return config;
         }, (error) => {
+            console.error('Request setup error:', error);
             return Promise.reject(error);
         });
         // Add response interceptor for error handling
         this.client.interceptors.response.use((response) => response, (error) => {
+            let errorMessage = 'An error occurred';
             if (error.response) {
                 // Handle specific HTTP error statuses
                 switch (error.response.status) {
                     case 401:
-                        vscode.window.showErrorMessage('Authentication failed. Please check your API token.');
+                        errorMessage = 'Authentication failed. Please check your API token.';
                         break;
                     case 403:
-                        vscode.window.showErrorMessage('Permission denied. You do not have access to this resource.');
+                        errorMessage = 'Permission denied. You do not have access to this resource.';
                         break;
                     case 404:
-                        vscode.window.showErrorMessage('The requested resource was not found.');
+                        errorMessage = 'The requested resource was not found.';
                         break;
                     case 500:
-                        vscode.window.showErrorMessage('An internal server error occurred. Please try again later.');
+                        errorMessage = 'An internal server error occurred. Please try again later.';
                         break;
                     default:
-                        vscode.window.showErrorMessage(`Request failed with status ${error.response.status}`);
+                        errorMessage = `Request failed with status ${error.response.status}`;
                 }
+                console.error('API Error:', errorMessage);
             }
             else if (error.request) {
                 // The request was made but no response was received
-                vscode.window.showErrorMessage('No response received from the server. Please check your connection.');
+                errorMessage = 'No response received from the server. Please check your connection.';
+                console.error('Network Error:', errorMessage);
             }
             else {
                 // Something happened in setting up the request
-                vscode.window.showErrorMessage(`Error: ${error.message}`);
+                errorMessage = `Error: ${error.message}`;
+                console.error('Request Error:', errorMessage);
             }
-            return Promise.reject(error);
+            // Add error to the error log that can be viewed via a command
+            this.logError(errorMessage);
+            return Promise.reject(new Error(errorMessage));
         });
     }
     static getInstance() {
@@ -109,6 +123,11 @@ class BackendService {
             BackendService.instance = new BackendService();
         }
         return BackendService.instance;
+    }
+    logError(message) {
+        // Log errors to the extension's output channel
+        const outputChannel = vscode.window.createOutputChannel('Dev Time Tracker');
+        outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
     }
     async initialize() {
         try {
@@ -137,7 +156,7 @@ class BackendService {
     }
     async getSettings(key) {
         try {
-            const url = key ? `/api/settings/${key}` : '/api/settings';
+            const url = key ? `/api/extension-settings/${key}` : '/api/extension-settings';
             const response = await this.client.get(url);
             return response.data;
         }
@@ -148,7 +167,7 @@ class BackendService {
     }
     async updateSetting(key, value) {
         try {
-            const response = await this.client.put(`/api/settings/${key}`, { value });
+            const response = await this.client.put(`/api/extension-settings/${key}`, { value });
             return response.data;
         }
         catch (error) {
@@ -158,7 +177,7 @@ class BackendService {
     }
     async deleteSetting(key) {
         try {
-            await this.client.delete(`/api/settings/${key}`);
+            await this.client.delete(`/api/extension-settings/${key}`);
             return true;
         }
         catch (error) {
@@ -189,7 +208,11 @@ class BackendService {
     }
     async updateExtensionSetting(key, value) {
         try {
-            const response = await this.client.put(`/api/extension-settings/${key}`, { value });
+            // Backend expects value to be an array/object, so wrap primitives
+            const wrappedValue = Array.isArray(value) || typeof value === 'object' && value !== null
+                ? value
+                : { data: value };
+            const response = await this.client.put(`/api/extension-settings/${key}`, { value: wrappedValue });
             return response.data.data || null;
         }
         catch (error) {

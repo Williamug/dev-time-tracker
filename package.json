@@ -76,6 +76,11 @@
         "category": "Dev Time Tracker"
       },
       {
+        "command": "devtimetracker.toggleDiffCapture",
+        "title": "Toggle Code Diff Tracking",
+        "category": "Dev Time Tracker"
+      },
+      {
         "command": "devtimetracker.addCustomReminder",
         "title": "Add New Reminder",
         "category": "Dev Time Tracker"
@@ -142,6 +147,11 @@
           "default": 300,
           "minimum": 60,
           "description": "Interval in seconds to sync metrics with the backend"
+        },
+        "devtimetracker.tracking.enableDiffCapture": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Enable capturing code diffs for each activity. **Shows what code was added/removed in the dashboard.**\n\n**Enabled**: Full diff tracking with side-by-side view\n**Disabled**: Only tracks line counts (less memory usage)"
         },
         "devtimetracker.health.breakReminderEnabled": {
           "type": "boolean",
