@@ -7,6 +7,8 @@ export interface CodingActivityEvent {
   file_path: string;
   language: string;
   project_name: string;
+  editor: string;
+  operating_system: string;
   started_at: string;
   ended_at?: string;
   keystrokes?: number;
@@ -102,12 +104,18 @@ export class EventBuffer {
         console.error('[EventBuffer] Error getting diff data:', error);
         // Continue without diff data
       }
-    }    const activity: CodingActivityEvent = {
+    }    // Get editor and OS information
+    const editorInfo = this.getEditorInfo();
+    const osInfo = this.getOperatingSystem();
+
+    const activity: CodingActivityEvent = {
       event_type: eventType,
       duration: Math.max(1, duration), // at least 1 second
       file_path: vscode.workspace.asRelativePath(editor.document.uri),
       language: editor.document.languageId,
       project_name: this.projectName,
+      editor: editorInfo,
+      operating_system: osInfo,
       started_at: startedAt,
       ended_at: endedAt,
       keystrokes: extraData?.keystrokes ?? 0,
@@ -181,6 +189,31 @@ export class EventBuffer {
   setDiffService(diffService: DiffService | null) {
     this.diffService = diffService;
     console.log('[EventBuffer] DiffService updated:', !!diffService);
+  }
+
+  /**
+   * Get editor name and version
+   */
+  private getEditorInfo(): string {
+    return `VS Code ${vscode.version}`;
+  }
+
+  /**
+   * Get operating system information
+   */
+  private getOperatingSystem(): string {
+    const platform = process.platform;
+    const osMap: { [key: string]: string } = {
+      'darwin': 'macOS',
+      'win32': 'Windows',
+      'linux': 'Linux',
+      'freebsd': 'FreeBSD',
+      'openbsd': 'OpenBSD',
+      'sunos': 'SunOS',
+      'aix': 'AIX'
+    };
+
+    return osMap[platform] || platform;
   }
 
   stop() {
