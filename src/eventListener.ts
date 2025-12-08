@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { EventBuffer } from './buffer';
+import { FileSessionTracker } from './services/FileSessionTracker';
 
 export class EventListener {
   private disposables: vscode.Disposable[] = [];
@@ -14,11 +15,11 @@ export class EventListener {
   constructor(
     private context: vscode.ExtensionContext,
     private buffer: EventBuffer,
-    private sessionId: string
+    private sessionId: string,
+    private fileSessionTracker?: FileSessionTracker
   ) {}
 
   start() {
-    console.log('[EventListener] Starting event listeners');
 
     // Track typing events with debouncing
     this.disposables.push(
@@ -50,11 +51,19 @@ export class EventListener {
 
           // Set new timer to track typing after user stops
           this.typingTimer = setTimeout(() => {
-            this.buffer.add('typing', {
-              keystrokes: this.currentSessionKeystrokes,
-              lines_added: this.currentSessionLinesAdded,
-              lines_removed: this.currentSessionLinesRemoved
-            });
+            const editor = vscode.window.activeTextEditor;
+            if (editor && this.fileSessionTracker) {
+              // Feed metrics to FileSessionTracker instead of directly to buffer
+              this.fileSessionTracker.recordActivity(
+                editor.document.uri.fsPath,
+                editor.document.languageId,
+                {
+                  keystrokes: this.currentSessionKeystrokes,
+                  linesAdded: this.currentSessionLinesAdded,
+                  linesRemoved: this.currentSessionLinesRemoved
+                }
+              );
+            }
 
             // Reset session metrics
             this.currentSessionKeystrokes = 0;
@@ -65,67 +74,30 @@ export class EventListener {
       })
     );
 
-    // Track file save events
-    this.disposables.push(
-      vscode.workspace.onDidSaveTextDocument((document) => {
-        console.log('[EventListener] File saved:', document.fileName);
-        this.buffer.add('file_save');
-      })
-    );
+    // Track file switches to end sessions
+    if (this.fileSessionTracker) {
+      let previousFile: string | undefined;
 
-    // Track file open events
-    this.disposables.push(
-      vscode.workspace.onDidOpenTextDocument((document) => {
-        // Ignore untitled and output documents
-        if (document.uri.scheme === 'file') {
-          console.log('[EventListener] File opened:', document.fileName);
-          this.buffer.add('file_open');
-        }
-      })
-    );
+      this.disposables.push(
+        vscode.window.onDidChangeActiveTextEditor((editor) => {
+          if (previousFile && previousFile !== editor?.document.uri.fsPath) {
+            // User switched files, end the previous session
+            this.fileSessionTracker?.endSession(previousFile);
+          }
+          previousFile = editor?.document.uri.fsPath;
+        })
+      );
 
-    // Track file close events
-    this.disposables.push(
-      vscode.workspace.onDidCloseTextDocument((document) => {
-        if (document.uri.scheme === 'file') {
-          console.log('[EventListener] File closed:', document.fileName);
-          this.buffer.add('file_close');
-        }
-      })
-    );
-
-    // Track active editor changes
-    this.disposables.push(
-      vscode.window.onDidChangeActiveTextEditor((editor) => {
-        if (editor) {
-          console.log('[EventListener] Active editor changed:', editor.document.fileName);
-          this.buffer.add('file_open');
-        }
-      })
-    );
-
-    // Optional: Track mouse movement (be careful with this - can generate many events)
-    // Uncomment if you want to track mouse activity
-    /*
-    let lastMouseMove = 0;
-    const mouseMoveThrottle = 5000; // Only track every 5 seconds
-
-    this.disposables.push(
-      vscode.window.onDidChangeTextEditorSelection(() => {
-        const now = Date.now();
-        if (now - lastMouseMove > mouseMoveThrottle) {
-          lastMouseMove = now;
-          this.buffer.add('mousemove');
-        }
-      })
-    );
-    */
-
-    console.log('[EventListener] All event listeners registered');
+      // Track file closures
+      this.disposables.push(
+        vscode.workspace.onDidCloseTextDocument((document) => {
+          this.fileSessionTracker?.endSession(document.uri.fsPath);
+        })
+      );
+    }
   }
 
   stop() {
-    console.log('[EventListener] Stopping event listeners');
 
     // Clear typing timer
     if (this.typingTimer) {
