@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { DiffService } from './services/DiffService';
 
 export interface CodingActivityEvent {
-  event_type: 'typing' | 'file_save' | 'file_open' | 'file_close' | 'debug' | 'mousemove';
+  event_type: 'typing' | 'click';
   duration: number;
   file_path: string;
   language: string;
@@ -51,17 +51,10 @@ export class EventBuffer {
 
     this.diffService = diffService || null;
 
-    console.log('[EventBuffer] Initialized with:', {
-      apiUrl: this.apiUrl,
-      hasToken: !!this.apiToken,
-      sessionId: this.sessionId,
-      projectName: this.projectName,
-      hasDiffService: !!this.diffService
-    });
   }
 
   start() {
-    console.log('[EventBuffer] Starting buffer with 30s flush interval');
+
     this.timer = setInterval(() => this.flush(), this.intervalMs);
 
     // Update current file info when editor changes
@@ -77,11 +70,12 @@ export class EventBuffer {
   }
 
   add(
-    eventType: 'typing' | 'file_save' | 'file_open' | 'file_close' | 'mousemove',
+    eventType: 'typing' | 'click',
     extraData?: {
       keystrokes?: number;
       lines_added?: number;
       lines_removed?: number;
+      clicks?: number;
     }
   ) {
     const editor = vscode.window.activeTextEditor;
@@ -97,11 +91,11 @@ export class EventBuffer {
 
     // Get diff data if available
     let diffData = null;
-    if (this.diffService && (eventType === 'typing' || eventType === 'file_save')) {
+    if (this.diffService && eventType === 'typing') {
       try {
         diffData = this.diffService.getDiffAndReset(filePath);
       } catch (error) {
-        console.error('[EventBuffer] Error getting diff data:', error);
+
         // Continue without diff data
       }
     }    // Get editor and OS information
@@ -129,29 +123,21 @@ export class EventBuffer {
     };
 
     this.buffer.push(activity);
-    console.log(`[EventBuffer] Added ${eventType} event. Buffer size: ${this.buffer.length}`, {
-      keystrokes: activity.keystrokes,
-      lines_added: activity.lines_added,
-      lines_removed: activity.lines_removed,
-      hasDiff: !!diffData?.diff
-    });
 
     if (this.buffer.length >= this.batchSize) {
-      console.log('[EventBuffer] Buffer full, flushing...');
+
       this.flush();
     }
   }
 
   private async flush() {
     if (!this.buffer.length) {
-      console.log('[EventBuffer] Nothing to flush');
+
       return;
     }
 
     const batch = this.buffer.splice(0);
     const endpoint = `${this.apiUrl}/api/coding-activities/batch`;
-
-    console.log(`[EventBuffer] Flushing ${batch.length} events to ${endpoint}`);
 
     try {
       const response = await fetch(endpoint, {
@@ -170,13 +156,11 @@ export class EventBuffer {
       }
 
       const result = await response.json();
-      console.log(`[EventBuffer] Successfully flushed ${batch.length} events:`, result);
 
       // Show success notification (optional)
       vscode.window.setStatusBarMessage(`✓ Synced ${batch.length} activities`, 3000);
 
     } catch (err) {
-      console.error('[EventBuffer] Flush failed:', err);
 
       // Re-queue events on failure
       this.buffer.unshift(...batch);
@@ -188,7 +172,7 @@ export class EventBuffer {
 
   setDiffService(diffService: DiffService | null) {
     this.diffService = diffService;
-    console.log('[EventBuffer] DiffService updated:', !!diffService);
+
   }
 
   /**
@@ -217,7 +201,7 @@ export class EventBuffer {
   }
 
   stop() {
-    console.log('[EventBuffer] Stopping and flushing remaining events');
+
     if (this.timer) clearInterval(this.timer);
     this.flush();
   }
