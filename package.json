@@ -1,8 +1,8 @@
 {
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
-  "description": "Dev Time Tracker is an extension that helps developers track their productivity while coding. It tracks time spent on projects, provides insights into code quality, and offers health-related reminders to maintain a healthy work-life balance.",
-  "version": "2.0.1",
+  "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
+  "version": "2.0.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
@@ -20,7 +20,9 @@
     "theme": "dark"
   },
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onCommand:devtimetracker.manageCustomReminders",
+    "onCommand:devtimetracker.addCustomReminder"
   ],
   "main": "./out/extension.js",
   "contributes": {
