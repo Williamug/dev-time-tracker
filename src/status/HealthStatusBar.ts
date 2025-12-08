@@ -28,7 +28,6 @@ export class HealthStatusBar {
 
   private createStatusBarItem(type: ReminderType, priority: number): void {
     try {
-      console.log(`[HealthStatusBar] Creating status bar item for ${type}`);
 
       // Create the status bar item
       const item = vscode.window.createStatusBarItem(
@@ -46,13 +45,12 @@ export class HealthStatusBar {
 
       // Force show the item
       item.show();
-      console.log(`[HealthStatusBar] Status bar item created for ${type}:`, item);
 
       // Store the item
       this.statusBarItems.set(type, item);
 
     } catch (error) {
-      console.error(`[HealthStatusBar] Error creating status bar item for ${type}:`, error);
+
     }
   }
 
@@ -136,14 +134,13 @@ export class HealthStatusBar {
     options: ReminderOptions
   ): void {
     try {
-      console.log(`[HealthStatusBar] Updating reminder for ${type}:`, { minutes, options });
 
       // Clear any existing interval
       this.clearCountdown(type);
 
       const item = this.statusBarItems.get(type);
       if (!item) {
-        console.error(`[HealthStatusBar] No status bar item found for ${type}`);
+
         return;
       }
 
@@ -181,7 +178,7 @@ export class HealthStatusBar {
         this.countdownIntervals.set(type, interval);
       }
     } catch (error) {
-      console.error(`[HealthStatusBar] Error in updateReminder for ${type}:`, error);
+
     }
   }
 
