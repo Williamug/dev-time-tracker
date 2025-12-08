@@ -20,7 +20,6 @@ export class DiffService {
   private disposables: vscode.Disposable[] = [];
 
   start() {
-    console.log('[DiffService] Starting diff tracking');
 
     // Initialize current document states
     vscode.workspace.textDocuments.forEach(doc => {
@@ -143,13 +142,13 @@ export class DiffService {
   } | null {
     const state = this.fileStates.get(filePath);
     if (!state) {
-      console.log('[DiffService] No state found for file:', filePath);
+
       return null;
     }
 
     // If no line changes at all, return null
     if (state.linesAdded === 0 && state.linesRemoved === 0 && state.changes.length === 0) {
-      console.log('[DiffService] No changes at all for file:', filePath);
+
       return null;
     }
 
@@ -162,14 +161,6 @@ export class DiffService {
       linesRemoved: state.linesRemoved,
       diff
     };
-
-    console.log('[DiffService] Generated diff for:', filePath, {
-      linesAdded: result.linesAdded,
-      linesRemoved: result.linesRemoved,
-      diffLength: diff.length,
-      changesCount: state.changes.length,
-      hasDetailedChanges: state.changes.length > 0
-    });
 
     // Reset state for next period
     state.previousContent = state.currentContent;
