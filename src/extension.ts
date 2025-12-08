@@ -9,6 +9,7 @@ import { HealthService } from './services/HealthService';
 import { BackendService } from './services/BackendService';
 import { CustomReminderService } from './services/CustomReminderService';
 import { DiffService } from './services/DiffService';
+import { FileSessionTracker } from './services/FileSessionTracker';
 import { registerCustomReminderCommands } from './commands/manageCustomReminders';
 import { ICustomReminder } from './models/CustomReminder';
 
@@ -19,6 +20,7 @@ let activityCheckInterval: NodeJS.Timeout | null = null;
 let statusBarManager: StatusBarManager | null = null;
 let diffService: DiffService | null = null;
 let eventBuffer: EventBuffer | null = null;
+let fileSessionTracker: FileSessionTracker | null = null;
 let lastActivityLog = 0; // Throttle activity logs
 
 // Update activity status based on user interaction
@@ -48,9 +50,6 @@ function trackUserActivity(reason: string) {
 }
 
 export async function activate(ctx: vscode.ExtensionContext) {
-  console.log('[Extension] Activating Dev Time Tracker...');
-  console.log('[Extension] Extension context:', ctx);
-  console.log('[Extension] Extension path:', ctx.extensionPath);
 
   // Log available commands for debugging
   const availableCommands = await vscode.commands.getCommands(true);
@@ -60,8 +59,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const apiUrl = cfg.get<string>('apiUrl');
   const apiToken = cfg.get<string>('apiToken');
 
-  console.log('[Extension] Configuration loaded:', { hasApiUrl: !!apiUrl, hasApiToken: !!apiToken });
-
   // Initialize services with backend support
   let backendService: BackendService | null = null;
   let metricsService: MetricsService | null = null;
@@ -70,7 +67,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   let customReminderService: CustomReminderService | null = null;
 
   // Register health reminder commands FIRST (before HealthService creates status bar items)
-  console.log('[Extension] Registering health reminder commands...');
+
   ctx.subscriptions.push(
     vscode.commands.registerCommand('devtimetracker.start202020Timer', async () => {
       await healthService?.start202020Timer();
@@ -94,50 +91,46 @@ export async function activate(ctx: vscode.ExtensionContext) {
       // Placeholder for status bar click
     })
   );
-  console.log('[Extension] Health reminder commands registered');
 
   // Initialize backend service FIRST if configured (so other services can use it)
   console.log('[Extension] Checking backend configuration...', { apiUrl, apiToken: apiToken ? '***' + apiToken.slice(-8) : 'none' });
 
   if (apiUrl) {
-    console.log('[Extension] API URL found, initializing BackendService...');
+
     try {
       backendService = BackendService.getInstance();
-      console.log('[Extension] BackendService instance created, initializing...');
+
       const initialized = await backendService.initialize();
 
       if (initialized) {
-        console.log('[Backend] ✅ Successfully connected to backend service at', apiUrl);
+
         vscode.window.showInformationMessage(`✅ Connected to backend: ${apiUrl}`);
       }
     } catch (error) {
-      console.error('[Backend] ❌ Error initializing backend service:', error);
+
       vscode.window.showWarningMessage(`❌ Failed to connect to backend: ${error}`);
     }
   } else {
-    console.log('[Extension] ⚠️  No API URL configured - backend service disabled');
+
     vscode.window.showWarningMessage('Dev Time Tracker: No API URL configured. Backend features disabled.');
   }
 
   // Initialize HealthService (it may use backend if available)
-  console.log('[Extension] ===== STARTING HEALTH SERVICE INITIALIZATION =====');
+
   try {
     // Initialize HealthService
-    console.log('[Extension] Creating HealthService instance...');
+
     healthService = HealthService.getInstance(backendService || undefined, ctx);
-    console.log('[Extension] ✓ HealthService instance created');
 
     // Verify HealthStatusBar instance
     if (!healthService.healthStatusBar) {
-      console.error('[Extension] ✗ HealthStatusBar instance is null/undefined!');
+
     } else {
-      console.log('[Extension] ✓ HealthStatusBar instance found');
 
       // Try to force show status bar items
       const types = ['break', 'posture', 'eyeStrain'] as const;
       for (const type of types) {
         try {
-          console.log(`[Extension] Attempting to show ${type} status bar item...`);
 
           // Use type assertion to access the methods
           const statusBar = healthService.healthStatusBar as any;
@@ -145,29 +138,28 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
           if (typeof statusBar[methodName] === 'function') {
             statusBar[methodName](1);
-            console.log(`[Extension] ✓ ${type} status bar item shown`);
+
           } else {
-            console.error(`[Extension] ✗ Method ${methodName} not found on HealthStatusBar`);
+
           }
         } catch (error) {
-          console.error(`[Extension] ✗ Error showing ${type} status bar item:`, error);
+
         }
       }
     }
   } catch (error) {
-    console.error('[Extension] Error initializing HealthService:', error);
+
   }
 
   // Initialize other services with backend (if available)
   if (backendService) {
-    console.log('[Extension] Initializing services with backend support...');
 
     // Register configuration change listener
     let configChangeTimeout: NodeJS.Timeout | null = null;
     vscode.workspace.onDidChangeConfiguration(async (e) => {
       if (e.affectsConfiguration('devtimetracker.apiUrl') || e.affectsConfiguration('devtimetracker.apiToken')) {
         // Only reinitialize if API connection settings changed
-        console.log('[Backend] API connection settings changed, reinitializing...');
+
         await backendService?.initialize();
       } else if (e.affectsConfiguration('devtimetracker.tracking.enableDiffCapture')) {
         // Handle diff tracking toggle
@@ -180,7 +172,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
             diffService = new DiffService();
             diffService.start();
             eventBuffer?.setDiffService(diffService);
-            console.log('[Extension] DiffService enabled via settings');
+
           }
         } else {
           // Disable diff tracking
@@ -188,7 +180,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
             diffService.dispose();
             diffService = null;
             eventBuffer?.setDiffService(null);
-            console.log('[Extension] DiffService disabled via settings');
+
           }
         }
       } else if (e.affectsConfiguration('devtimetracker')) {
@@ -197,7 +189,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
           clearTimeout(configChangeTimeout);
         }
         configChangeTimeout = setTimeout(async () => {
-          console.log('[Backend] Settings changed, pushing to backend...');
+
           try {
             const config = vscode.workspace.getConfiguration('devtimetracker');
             const settingsKeys = ['pomodoro', 'health', 'metrics'];
@@ -210,9 +202,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
                 }
               }
             }
-            console.log('[Backend] Settings pushed successfully');
+
           } catch (error) {
-            console.error('[Backend] Failed to push settings:', error);
+
           }
         }, 1000); // 1 second debounce
       }
@@ -227,7 +219,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       customReminderService = CustomReminderService.getInstance(ctx, metricsService);
     }
   } else {
-    console.log('[Extension] Initializing services WITHOUT backend support...');
+
     metricsService = MetricsService.getInstance(undefined);
     gitService = GitService.getInstance(undefined);
   }
@@ -262,13 +254,12 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Trigger initial activity to start the session
   if (statusBarManager) {
     statusBarManager.updateActivityStatus(true);
-    console.log('[Extension] Initial activity status set to active');
 
     // Start activity check interval
     activityCheckInterval = setInterval(() => {
       updateActivityStatus();
     }, 1000); // Check every second
-    console.log('[Extension] Activity check interval started');
+
   }
 
   // Initialize session manager
@@ -282,12 +273,16 @@ export async function activate(ctx: vscode.ExtensionContext) {
     diffService.start();
     console.log('[Extension] DiffService initialized (enabled)');
   } else {
-    console.log('[Extension] DiffService disabled by user settings');
+
   }
 
-  // Initialize event buffer and listener with diff service
+  // Initialize event buffer and FileSessionTracker
   eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService);
-  const listener = new EventListener(ctx, eventBuffer, sessionId);
+  fileSessionTracker = new FileSessionTracker(eventBuffer, diffService);
+  fileSessionTracker.start();
+
+  // Initialize event listener with FileSessionTracker
+  const listener = new EventListener(ctx, eventBuffer, sessionId, fileSessionTracker);
   listener.start();
 
   // Start the event buffer
@@ -297,7 +292,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const activityEvents: vscode.Disposable[] = [
     // Editor events - Track typing and content changes
     vscode.window.onDidChangeActiveTextEditor((e) => {
-      console.log('[Activity] Active editor changed:', e?.document.uri.fsPath);
+
       trackUserActivity('editor changed');
     }),
 
@@ -382,7 +377,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // 2b. Test notifications command (for debugging)
   disposables.push(vscode.commands.registerCommand('devtimetracker.testNotifications', async () => {
     vscode.window.showInformationMessage('Testing notifications - this should appear in bottom-right corner', 'OK');
-    console.log('[Extension] Test notification sent');
 
     // Also test backend connection
     if (backendService) {
@@ -459,7 +453,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   updateActivityStatus();
 
   // Log successful activation
-  console.log('[Extension] Dev Time Tracker activated successfully');
 
   // Return the public API if needed
   return {
@@ -468,7 +461,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
 }
 
 export async function deactivate() {
-  console.log('[Extension] Deactivating Dev Time Tracker');
 
   // Clear activity check interval
   if (activityCheckInterval) {
@@ -484,6 +476,12 @@ export async function deactivate() {
   if (diffService) {
     diffService.dispose();
     diffService = null;
+  }
+
+  // End all active file sessions
+  if (fileSessionTracker) {
+    fileSessionTracker.endAllSessions();
+    fileSessionTracker = null;
   }
 
   // End current session

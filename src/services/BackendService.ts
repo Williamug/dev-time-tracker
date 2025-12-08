@@ -27,7 +27,6 @@ export class BackendService {
     const apiUrl = this.config.get<string>('apiUrl');
     const apiToken = this.config.get<string>('apiToken');
 
-    console.log('[BackendService] Constructor - API URL:', apiUrl);
     console.log('[BackendService] Constructor - API Token (first 10 chars):', apiToken?.substring(0, 10) + '...');
 
     if (!apiUrl) {
@@ -55,12 +54,12 @@ export class BackendService {
           config.headers.Authorization = `Bearer ${token}`;
           console.log('[BackendService] Using token:', token?.toString().substring(0, 10) + '...');
         } else {
-          console.warn('[BackendService] No API token configured!');
+
         }
         return config;
       },
       (error) => {
-        console.error('Request setup error:', error);
+
         return Promise.reject(error);
       }
     );
@@ -89,15 +88,15 @@ export class BackendService {
             default:
               errorMessage = `Request failed with status ${error.response.status}`;
           }
-          console.error('API Error:', errorMessage);
+
         } else if (error.request) {
           // The request was made but no response was received
           errorMessage = 'No response received from the server. Please check your connection.';
-          console.error('Network Error:', errorMessage);
+
         } else {
           // Something happened in setting up the request
           errorMessage = `Error: ${error.message}`;
-          console.error('Request Error:', errorMessage);
+
         }
 
         // Add error to the error log that can be viewed via a command
@@ -126,7 +125,7 @@ export class BackendService {
       await this.loadSettings();
       return true;
     } catch (error) {
-      console.error('Failed to initialize BackendService:', error);
+
       return false;
     }
   }
@@ -141,7 +140,7 @@ export class BackendService {
         }
       }
     } catch (error) {
-      console.warn('Failed to load settings from backend:', error);
+
       throw error;
     }
   }
@@ -152,7 +151,7 @@ export class BackendService {
       const response = await this.client.get(url);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch settings:', error);
+
       throw error;
     }
   }
@@ -162,7 +161,7 @@ export class BackendService {
       const response = await this.client.put(`/api/extension-settings/${key}`, { value });
       return response.data;
     } catch (error) {
-      console.error('Failed to update setting:', error);
+
       throw error;
     }
   }
@@ -172,7 +171,7 @@ export class BackendService {
       await this.client.delete(`/api/extension-settings/${key}`);
       return true;
     } catch (error) {
-      console.error('Failed to delete setting:', error);
+
       return false;
     }
   }
@@ -183,7 +182,7 @@ export class BackendService {
       const response = await this.client.get('/api/extension-settings');
       return response.data.data || [];
     } catch (error) {
-      console.error('Failed to fetch extension settings:', error);
+
       return [];
     }
   }
@@ -193,7 +192,7 @@ export class BackendService {
       const response = await this.client.get(`/api/extension-settings/${key}`);
       return response.data.data || null;
     } catch (error) {
-      console.error(`Failed to fetch extension setting ${key}:`, error);
+
       return null;
     }
   }
@@ -208,7 +207,7 @@ export class BackendService {
       const response = await this.client.put(`/api/extension-settings/${key}`, { value: wrappedValue });
       return response.data.data || null;
     } catch (error) {
-      console.error(`Failed to update extension setting ${key}:`, error);
+
       throw error;
     }
   }
@@ -218,7 +217,7 @@ export class BackendService {
       await this.client.delete(`/api/extension-settings/${key}`);
       return true;
     } catch (error) {
-      console.error(`Failed to delete extension setting ${key}:`, error);
+
       return false;
     }
   }
@@ -249,7 +248,6 @@ export class BackendService {
       }
     }
 
-    console.error('All retry attempts failed for event:', eventType, 'Error:', lastError);
     return false;
   }
 
@@ -276,7 +274,7 @@ export class BackendService {
       }
       return null;
     } catch (error) {
-      console.error('Login failed:', error);
+
       throw error;
     }
   }
@@ -291,7 +289,7 @@ export class BackendService {
       }
       return false;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+
       return false;
     }
   }
@@ -308,7 +306,7 @@ export class BackendService {
       }
       return false;
     } catch (error) {
-      console.error('Failed to sync settings:', error);
+
       return false;
     }
   }
@@ -318,7 +316,7 @@ export class BackendService {
       const response = await this.client.get('/api/analytics/summary');
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+
       throw error;
     }
   }
@@ -328,7 +326,7 @@ export class BackendService {
       const response = await this.client.get(`/api/analytics/projects/${projectId}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch project analytics:', error);
+
       throw error;
     }
   }

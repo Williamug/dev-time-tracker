@@ -66,9 +66,9 @@ export class CustomReminderService {
       this.setupEventListeners();
       this.startChecking();
       this.isInitialized = true;
-      console.log('[CustomReminderService] Initialized successfully');
+
     } catch (error) {
-      console.error('[CustomReminderService] Initialization failed:', error);
+
       throw error;
     }
   }
@@ -79,9 +79,9 @@ export class CustomReminderService {
       this.reminders = new Map(
         savedReminders.map(reminder => [reminder.id, CustomReminder.fromJSON(reminder)])
       );
-      console.log(`[CustomReminderService] Loaded ${savedReminders.length} reminders`);
+
     } catch (error) {
-      console.error('[CustomReminderService] Failed to load reminders:', error);
+
       this.reminders = new Map(); // Reset to empty map on error
     }
   }
@@ -97,10 +97,10 @@ export class CustomReminderService {
         try {
           const reminders = Array.from(this.reminders.values()).map(r => r.toJSON());
           await this.context.globalState.update(STORAGE_KEY, reminders);
-          console.log(`[CustomReminderService] Saved ${reminders.length} reminders`);
+
           resolve();
         } catch (error) {
-          console.error('[CustomReminderService] Failed to save reminders:', error);
+
           reject(error);
         } finally {
           this.pendingSave = null;
@@ -125,7 +125,7 @@ export class CustomReminderService {
         try {
           await this.saveReminders();
         } catch (error) {
-          console.error('[CustomReminderService] Error during cleanup:', error);
+
         }
       }
     });
@@ -147,7 +147,7 @@ export class CustomReminderService {
       try {
         await this.checkReminders();
       } catch (error) {
-        console.error('[CustomReminderService] Error checking reminders:', error);
+
       }
     }, CustomReminderService.CHECK_INTERVAL);
   }
@@ -191,7 +191,7 @@ export class CustomReminderService {
     if (action.action.toLowerCase() === 'snooze') {
       // Default snooze for 30 minutes
       reminder.lastTriggered = Date.now() + (30 * 60 * 1000);
-      console.log(`[CustomReminder] "${reminder.title}" snoozed for 30 minutes`);
+
     }
     // Add more action types as needed
 

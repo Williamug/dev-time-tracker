@@ -57,7 +57,6 @@ export class HealthService {
 
     // Initialize status bar
     this.healthStatusBar = HealthStatusBar.getInstance();
-    console.log('[HealthService] HealthStatusBar initialized');
 
     // Load configuration and initialize
     this.loadConfig();
@@ -75,16 +74,15 @@ export class HealthService {
   }
 
   private initialize(): void {
-    console.log('[HealthService] Initializing...');
+
     this.setupEventListeners();
     this.startTimers();
-    console.log('[HealthService] Initialization complete');
+
   }
 
   private loadConfig(): void {
     try {
       const config = vscode.workspace.getConfiguration('devtimetracker.health');
-      console.log('[HealthService] Loading configuration');
 
       // Break reminder settings (convert seconds to minutes)
       this.breakReminderInterval = Math.floor((config.get<number>('breakReminderInterval') ?? 3600) / 60);
@@ -106,7 +104,7 @@ export class HealthService {
       this.eyeStrainSnoozeDuration = Math.floor((config.get<number>('eyeStrainSnoozeDuration') ?? 600) / 60);
       this.eyeStrainNotificationType = config.get<'info' | 'warning' | 'error' | 'none'>('eyeStrainNotificationType') ?? 'info';
       this.eyeStrainEnableSound = config.get<boolean>('eyeStrainEnableSound') ?? false;    } catch (error) {
-      console.error('[HealthService] Error loading configuration:', error);
+
       this.setDefaultConfig();
     }
   }
@@ -180,7 +178,7 @@ export class HealthService {
 
     // Start break reminder timer if enabled
     if (this.breakReminderEnabled) {
-      console.log('[HealthService] Starting break reminder timer');
+
       const breakTimer = setInterval(() => this.checkBreakReminder(), 60000); // Check every minute
       this.timers.push(breakTimer);
     } else {
@@ -189,7 +187,7 @@ export class HealthService {
 
     // Start posture reminder timer if enabled
     if (this.postureReminderEnabled) {
-      console.log('[HealthService] Starting posture reminder timer');
+
       const postureTimer = setInterval(() => this.checkPostureReminder(), 60000); // Check every minute
       this.timers.push(postureTimer);
     } else {
@@ -198,7 +196,7 @@ export class HealthService {
 
     // Start eye strain timer if enabled
     if (this.eyeStrainEnabled) {
-      console.log('[HealthService] Starting eye strain reminder timer');
+
       const eyeStrainTimer = setInterval(() => this.checkEyeStrainReminder(), 60000); // Check every minute
       this.timers.push(eyeStrainTimer);
     } else {
@@ -346,7 +344,7 @@ export class HealthService {
     vscode.window.showInformationMessage(message);
 
     // Log for debugging
-    console.log(`[HealthService] Showed ${type} reminder: ${message}`);
+
   }
 
   private getReminderTypeLabel(type: 'break' | 'posture' | 'eyeStrain'): string {
