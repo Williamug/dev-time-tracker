@@ -49,7 +49,7 @@ export class GitService {
       this.setupEventListeners();
       this.startPolling();
     } catch (error) {
-      console.warn('[GitService] Git is not available:', error);
+
       this.isEnabled = false;
     }
   }
@@ -99,7 +99,7 @@ export class GitService {
         }
       }
     } catch (error) {
-      console.error('[GitService] Error checking for new commits:', error);
+
     }
   }
 
@@ -112,7 +112,7 @@ export class GitService {
 
       return this.parseGitLog(stdout);
     } catch (error) {
-      console.error(`[GitService] Error getting commits for ${repoPath}:`, error);
+
       return [];
     }
   }
@@ -205,7 +205,7 @@ export class GitService {
       const { stdout } = await execAsync(`git -C "${repoPath}" rev-parse --abbrev-ref HEAD`);
       return stdout.trim();
     } catch (error) {
-      console.error('[GitService] Error getting current branch:', error);
+
       return null;
     }
   }
