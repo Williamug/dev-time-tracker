@@ -83,14 +83,14 @@ export class MetricsService implements IMetricsProvider {
 
   public static getInstance(backendService?: BackendService | null): MetricsService {
     if (!MetricsService.instance) {
-      console.log('[MetricsService] Creating new instance, backendService:', backendService ? '✅ Provided' : '❌ Not provided');
+
       MetricsService.instance = new MetricsService(backendService);
     } else if (backendService) {
       // Update backend service reference if provided
-      console.log('[MetricsService] Updating existing instance with backendService');
+
       MetricsService.instance.backendService = backendService;
     } else {
-      console.log('[MetricsService] Reusing existing instance, backendService:', MetricsService.instance.backendService ? '✅ Available' : '❌ Not available');
+
     }
     return MetricsService.instance;
   }
@@ -214,7 +214,7 @@ export class MetricsService implements IMetricsProvider {
     // Schedule a new sync with a small debounce delay
     this.syncTimeout = setTimeout(() => {
       this.syncWithBackend().catch(error => {
-        console.error('Error during scheduled sync:', error);
+
       });
     }, 5000); // 5 second debounce
   }
@@ -230,7 +230,7 @@ export class MetricsService implements IMetricsProvider {
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error during sync';
-      console.error('[Metrics] Force sync failed:', error);
+
       // Show error in status bar instead of popup
       const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
       statusBarItem.text = '$(error) Failed to sync metrics';
@@ -269,7 +269,7 @@ export class MetricsService implements IMetricsProvider {
 
       this.scheduleSync();
     } catch (error) {
-      console.error('Error handling editor change:', error);
+
     }
   }
 
@@ -321,14 +321,13 @@ export class MetricsService implements IMetricsProvider {
       // If we're approaching batch size, trigger a sync
       if (this.pendingMetrics.length + 1 >= MetricsService.MAX_BATCH_SIZE) {
         this.syncWithBackend().catch(error => {
-          console.error('Error during scheduled sync:', error);
+
         });
       } else {
         // Otherwise, schedule a delayed sync
         this.scheduleSync();
       }
     } catch (error) {
-      console.error('Error handling document change:', error);
 
       // Even if there's an error, try to schedule a sync to avoid losing data
       this.scheduleSync();
@@ -372,8 +371,6 @@ export class MetricsService implements IMetricsProvider {
     let success = false;
     let lastError: Error | null = null;
 
-    console.log(`[Metrics] Processing batch of ${batch.length} metrics...`);
-
     // Apply rate limiting
     this.updateRateLimitCounter();
 
@@ -398,7 +395,6 @@ export class MetricsService implements IMetricsProvider {
         this.consecutiveFailures = 0;
         this.lastSyncError = null;
         this.lastSyncTime = new Date();
-        console.log('[Metrics] Successfully synced with backend');
 
         // Show success notification only for forced syncs or after failures
         if (force || attempt > 1) {
@@ -416,12 +412,11 @@ export class MetricsService implements IMetricsProvider {
 
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
 
         if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
           // Wait before retry with exponential backoff
           const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-          console.log(`[Metrics] Retrying in ${delay}ms...`);
+
           await new Promise(resolve => setTimeout(resolve, delay));
         } else {
           // On final failure, update error state
@@ -441,24 +436,20 @@ export class MetricsService implements IMetricsProvider {
   private async syncWithBackend(force = false): Promise<void> {
     // Skip if already syncing
     if (this.isSyncing) {
-      console.log('[Metrics] Sync already in progress');
+
       return;
     }
 
     // Skip if no backend service
     if (!this.backendService) {
-      console.log('[Metrics] ⚠️  Backend service not available - cannot sync metrics');
-      console.log('[Metrics] Metrics will be collected locally but not sent to backend');
+
       return;
     }
-
-    console.log('[Metrics] 📤 Starting sync to backend, pending metrics:', this.pendingMetrics.length);
 
     // Check rate limiting
     if (this.isRateLimited) {
       if (Date.now() < this.rateLimitResetTime) {
         const remainingMs = this.rateLimitResetTime - Date.now();
-        console.log(`[Metrics] Rate limited - waiting ${remainingMs}ms before next request`);
 
         // Schedule a retry after rate limit resets
         setTimeout(() => this.syncWithBackend(force), remainingMs + 1000);
@@ -470,7 +461,7 @@ export class MetricsService implements IMetricsProvider {
     // Apply minimum sync interval (except for forced syncs)
     const now = Date.now();
     if (!force && now - this.lastSyncAttempt < MetricsService.MIN_SYNC_INTERVAL) {
-      console.log('[Metrics] Sync skipped - minimum sync interval not reached');
+
       return;
     }
     this.lastSyncAttempt = now;
@@ -483,7 +474,7 @@ export class MetricsService implements IMetricsProvider {
 
       // Skip if no meaningful data to sync (unless forced)
       if (!this.hasMeaningfulData(metrics) && !force) {
-        console.log('[Metrics] No meaningful data to sync');
+
         return;
       }
 
@@ -517,8 +508,6 @@ export class MetricsService implements IMetricsProvider {
         timestamp: Date.now()
       };
 
-      console.error('[Metrics] Sync failed:', error);
-
       // Only show error notification for forced syncs or first few failures
       if (force || this.consecutiveFailures <= 3) {
         const message = this.isRateLimited
@@ -544,7 +533,6 @@ export class MetricsService implements IMetricsProvider {
           5 * 60 * 1000 // Max 5 minutes
         );
 
-        console.log(`[Metrics] Scheduling retry in ${backoffTime}ms`);
         setTimeout(() => this.syncWithBackend(force), backoffTime);
       }
     } finally {
@@ -573,7 +561,7 @@ export class MetricsService implements IMetricsProvider {
 
       // Skip if no meaningful data to sync
       if (!this.hasMeaningfulData(metrics) && !force) {
-        console.log('[Metrics] No meaningful data to sync');
+
         return;
       }
 
@@ -586,8 +574,6 @@ export class MetricsService implements IMetricsProvider {
         machineId: vscode.env.machineId
       };
 
-      console.log('[Metrics] Syncing metrics with backend...');
-
       // Send with retry logic
       for (let attempt = 1; attempt <= MetricsService.MAX_RETRY_ATTEMPTS; attempt++) {
         try {
@@ -596,7 +582,6 @@ export class MetricsService implements IMetricsProvider {
           this.consecutiveFailures = 0;
           this.lastSyncError = null;
           this.lastSyncTime = new Date();
-          console.log('[Metrics] Successfully synced with backend');
 
           // Show success notification only for forced syncs or after failures
           if (force || attempt > 1) {
@@ -614,12 +599,11 @@ export class MetricsService implements IMetricsProvider {
 
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          console.error(`[Metrics] Sync attempt ${attempt} failed:`, errorMessage);
 
           if (attempt < MetricsService.MAX_RETRY_ATTEMPTS) {
             // Wait before retry with exponential backoff
             const delay = MetricsService.RETRY_DELAY_MS * Math.pow(2, attempt - 1);
-            console.log(`[Metrics] Retrying in ${delay}ms...`);
+
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
             throw error; // Re-throw after last attempt
@@ -635,7 +619,6 @@ export class MetricsService implements IMetricsProvider {
       };
 
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      console.error('[Metrics] All sync attempts failed:', error);
 
       // Only show error notification for forced syncs or first few failures
       if (force || this.consecutiveFailures <= 3) {
@@ -706,7 +689,7 @@ export class MetricsService implements IMetricsProvider {
     if (!this.isActive) {
       this.isActive = true;
       this.metricsCollector.resumeTracking();
-      console.log('[MetricsService] ✅ User active - tracking enabled');
+
     }
 
     // Update metrics
@@ -738,7 +721,7 @@ export class MetricsService implements IMetricsProvider {
     if (this.isActive) {
       this.isActive = false;
       this.metricsCollector.pauseTracking();
-      console.log('[MetricsService] ⏸️  User inactive - tracking paused');
+
     }
   }
 
