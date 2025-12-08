@@ -34,7 +34,6 @@ export class StatusBarManager {
     private lastResetDate: Date | null = null;
 
     private constructor(private context: vscode.ExtensionContext) {
-        console.log('[StatusBar] Creating new StatusBarManager instance');
 
         // Initialize last reset date
         this.lastResetDate = new Date();
@@ -42,10 +41,9 @@ export class StatusBarManager {
 
         try {
             this.loadPomodoroConfig();
-            console.log('[StatusBar] Pomodoro config loaded');
 
             // Create status bar items with higher priority (lower number = higher priority)
-            console.log('[StatusBar] Creating status bar items');
+
             this.statusBarItems = {
                 activity: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 5),
                 sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
@@ -53,12 +51,10 @@ export class StatusBarManager {
                 codeMetrics: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
                 pomodoro: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1)
             };
-            console.log('[StatusBar] Status bar items created');
 
             // Initialize status bar items
-            console.log('[StatusBar] Initializing status bar items');
+
             this.initializeStatusBarItems();
-            console.log('[StatusBar] Status bar items initialized');
 
             // Check for day change periodically (every 5 minutes)
             setInterval(() => this.checkForDayChange(), 5 * 60 * 1000);
@@ -67,7 +63,7 @@ export class StatusBarManager {
             context.subscriptions.push(
                 vscode.workspace.onDidChangeConfiguration(e => {
                     if (e.affectsConfiguration('devtimetracker.pomodoro')) {
-                        console.log('[Pomodoro] Configuration changed, reloading...');
+
                         this.loadPomodoroConfig();
 
                         // If pomodoro is running, offer to restart
@@ -89,7 +85,7 @@ export class StatusBarManager {
                 })
             );
         } catch (error) {
-            console.error('[StatusBar] Error during initialization:', error);
+
             throw error;
         }
     }
@@ -109,22 +105,21 @@ export class StatusBarManager {
   }
 
   public static getInstance(context?: vscode.ExtensionContext): StatusBarManager | null {
-    console.log('[StatusBar] Getting StatusBarManager instance');
 
     try {
       if (!StatusBarManager.instance && context) {
-        console.log('[StatusBar] Creating new instance');
+
         StatusBarManager.instance = new StatusBarManager(context);
 
         // Register commands
-        console.log('[StatusBar] Registering commands');
+
         const commands = [
           vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-            console.log('[StatusBar] Toggle Pomodoro command triggered');
+
             if (StatusBarManager.instance) {
               StatusBarManager.instance.togglePomodoro();
             } else {
-              console.error('[StatusBar] No instance available for togglePomodoro');
+
             }
           }),
           // Add command to get Pomodoro state
@@ -134,21 +129,20 @@ export class StatusBarManager {
         ];
 
         context.subscriptions.push(...commands);
-        console.log('[StatusBar] Commands registered');
+
       } else if (!StatusBarManager.instance) {
-        console.error('[StatusBar] No context provided for first-time initialization');
+
         return null;
       }
 
       return StatusBarManager.instance;
     } catch (error) {
-      console.error('[StatusBar] Error getting StatusBarManager instance:', error);
+
       return null;
     }
   }
 
     private initializeStatusBarItems(): void {
-        console.log('[StatusBar] Initializing status bar items');
 
         try {
             // Activity indicator
@@ -156,28 +150,24 @@ export class StatusBarManager {
             this.statusBarItems.activity.tooltip = 'Current activity status';
             this.statusBarItems.activity.command = 'devtimetracker.showStatus';
             this.statusBarItems.activity.show();
-            console.log('[StatusBar] Activity indicator initialized');
 
             // Session timer
             this.statusBarItems.sessionTimer.text = '$(watch) 0m 0s';
             this.statusBarItems.sessionTimer.tooltip = 'Current coding session duration';
             this.statusBarItems.sessionTimer.command = 'devtimetracker.showStatus';
             this.statusBarItems.sessionTimer.show();
-            console.log('[StatusBar] Session timer initialized');
 
             // Today's summary
             this.statusBarItems.todaySummary.text = '$(calendar) Today: 0m';
             this.statusBarItems.todaySummary.tooltip = 'Total coding time today';
             this.statusBarItems.todaySummary.command = 'devtimetracker.showStatus';
             this.statusBarItems.todaySummary.show();
-            console.log('[StatusBar] Today\'s summary initialized');
 
             // Code metrics
             this.statusBarItems.codeMetrics.text = '$(graph) Lines: +0/-0';
             this.statusBarItems.codeMetrics.tooltip = 'Code metrics for today';
             this.statusBarItems.codeMetrics.command = 'devtimetracker.showStatus';
             this.statusBarItems.codeMetrics.show();
-            console.log('[StatusBar] Code metrics initialized');
 
             // Pomodoro timer - use actual config value
             const workMins = this.pomodoroConfig.workDuration;
@@ -185,14 +175,14 @@ export class StatusBarManager {
             this.statusBarItems.pomodoro.tooltip = 'Click to start Pomodoro';
             this.statusBarItems.pomodoro.command = 'devtimetracker.togglePomodoro';
             this.statusBarItems.pomodoro.show();
-            console.log('[StatusBar] Pomodoro timer initialized');
+
         } catch (error) {
-            console.error('[StatusBar] Error initializing status bar items:', error);
+
         }
     }
 
     public updateActivityStatus(isActive: boolean): void {
-        console.log('[StatusBar] Updating activity status:', isActive ? 'Active' : 'Idle');
+
         try {
             this.isActive = isActive;
             if (isActive) {
@@ -203,7 +193,7 @@ export class StatusBarManager {
                 this.statusBarItems.activity.tooltip = 'You are actively coding';
 
                 if (!this.sessionStartTime) {
-                    console.log('[StatusBar] Starting new session');
+
                     this.startNewSession();
                 }
             } else {
@@ -214,7 +204,7 @@ export class StatusBarManager {
                 this.statusBarItems.activity.tooltip = 'Waiting for activity...';
             }
         } catch (error) {
-            console.error('[StatusBar] Error updating activity status:', error);
+
         }
     }
 
@@ -270,7 +260,7 @@ export class StatusBarManager {
                 // Update code metrics
                 this.updateCodeMetrics();
             } catch (error) {
-                console.error('[StatusBar] Error updating session timer:', error);
+
             }
         }, 1000);
     }
@@ -332,8 +322,6 @@ export class StatusBarManager {
                 now.getMonth() !== lastReset.getMonth() ||
                 now.getFullYear() !== lastReset.getFullYear()) {
 
-                console.log('[StatusBar] New day detected, resetting daily counters');
-
                 // Reset the last reset date to today
                 this.lastResetDate = new Date();
                 this.lastResetDate.setHours(0, 0, 0, 0);
@@ -349,7 +337,7 @@ export class StatusBarManager {
                 }
             }
         } catch (error) {
-            console.error('[StatusBar] Error checking for day change:', error);
+
         }
     }
 
@@ -378,7 +366,6 @@ export class StatusBarManager {
             sessionsBeforeLongBreak: config.get<number>('sessionsBeforeLongBreak') || 4,
             autoStartNext: config.get<boolean>('autoStartNextSession') !== false
         };
-        console.log('[Pomodoro] Loaded config:', this.pomodoroConfig);
 
         // If config changed and Pomodoro is not running, reset the display
         if (!this.isPomodoroRunning && previousWorkDuration !== this.pomodoroConfig.workDuration) {
@@ -540,13 +527,13 @@ export class StatusBarManager {
     }
 
     public dispose(): void {
-        console.log('[StatusBar] Disposing status bar items');
+
         // Clean up all status bar items
         Object.values(this.statusBarItems).forEach(item => {
             try {
                 item.dispose();
             } catch (error) {
-                console.error('[StatusBar] Error disposing status bar item:', error);
+
             }
         });
 
