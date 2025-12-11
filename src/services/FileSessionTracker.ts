@@ -8,6 +8,7 @@ interface FileSession {
   startTime: Date;
   lastActivityTime: Date;
   lastCheckpointTime: Date;
+  accumulatedDurationSeconds: number; // Track actual active time in current checkpoint period
   metrics: {
     keystrokes: number;
     linesAdded: number;
@@ -23,9 +24,10 @@ export class FileSessionTracker {
   private checkpointTimer?: NodeJS.Timeout;
 
   // Configuration
-  private readonly idleTimeoutMs = 5 * 60 * 1000; // 5 minutes idle = session end
+  private readonly idleTimeoutMs = 3 * 1000; // 3 seconds idle = pause timer
+  private readonly sessionEndTimeoutMs = 5 * 60 * 1000; // 5 minutes idle = session end
   private readonly checkpointIntervalMs = 5 * 60 * 1000; // 5 minutes between checkpoints
-  private readonly idleCheckIntervalMs = 30 * 1000; // Check for idle sessions every 30s
+  private readonly idleCheckIntervalMs = 1 * 1000; // Check for idle sessions every second
 
   constructor(
     private buffer: EventBuffer,
@@ -34,7 +36,6 @@ export class FileSessionTracker {
   }
 
   start() {
-
     // Periodically check for idle sessions
     this.idleCheckTimer = setInterval(() => {
       this.checkIdleSessions();
@@ -70,6 +71,7 @@ export class FileSessionTracker {
         startTime: now,
         lastActivityTime: now,
         lastCheckpointTime: now,
+        accumulatedDurationSeconds: 0,
         metrics: {
           keystrokes: 0,
           linesAdded: 0,
@@ -79,6 +81,16 @@ export class FileSessionTracker {
         checkpointCount: 0
       };
       this.activeSessions.set(filePath, session);
+    } else {
+      // Update accumulated duration (time since last activity)
+      const timeSinceLastActivity = (now.getTime() - session.lastActivityTime.getTime()) / 1000;
+
+      // Only accumulate time if activity was recent (within 3 second idle timeout)
+      // This ensures we only count active coding time, not idle time
+      if (timeSinceLastActivity < this.idleTimeoutMs / 1000) {
+        session.accumulatedDurationSeconds += timeSinceLastActivity;
+      }
+      // If more than 3 seconds have passed, duration pauses (we don't accumulate)
     }
 
     // Update metrics
@@ -124,7 +136,7 @@ export class FileSessionTracker {
 
     for (const [filePath, session] of this.activeSessions.entries()) {
       const idleTime = now - session.lastActivityTime.getTime();
-      if (idleTime >= this.idleTimeoutMs) {
+      if (idleTime >= this.sessionEndTimeoutMs) {
         idleSessions.push(filePath);
       }
     }
@@ -166,24 +178,26 @@ export class FileSessionTracker {
       return;
     }
 
-    const now = new Date();
-    const durationSeconds = Math.floor((now.getTime() - session.startTime.getTime()) / 1000);
+    // Use accumulated duration (actual active time) instead of total session time
+    const durationSeconds = Math.max(1, Math.round(session.accumulatedDurationSeconds));
 
-    // Send activity to buffer (it will handle the actual API call)
+    // Send activity to buffer with explicit duration
     this.buffer.add('typing', {
       keystrokes: session.metrics.keystrokes,
       lines_added: session.metrics.linesAdded,
       lines_removed: session.metrics.linesRemoved,
-      clicks: session.metrics.clicks
+      clicks: session.metrics.clicks,
+      duration_seconds: durationSeconds
     });
 
-    // Reset metrics for next checkpoint period (but keep session alive)
+    // Reset metrics AND duration for next checkpoint period (but keep session alive)
     if (!isFinal) {
       session.metrics.keystrokes = 0;
       session.metrics.linesAdded = 0;
       session.metrics.linesRemoved = 0;
       session.metrics.clicks = 0;
-      session.lastCheckpointTime = now;
+      session.accumulatedDurationSeconds = 0; // Reset duration for next checkpoint
+      session.lastCheckpointTime = new Date();
       session.checkpointCount++;
     }
   }
@@ -205,7 +219,23 @@ export class FileSessionTracker {
     return this.activeSessions.size;
   }
 
-  stop() {
+  /**
+   * Check if there's been recent activity (within idle timeout)
+   * Used by status bar to determine active/idle status
+   */
+  hasRecentActivity(): boolean {
+    const now = new Date().getTime();
+
+    for (const session of this.activeSessions.values()) {
+      const timeSinceActivity = now - session.lastActivityTime.getTime();
+
+      if (timeSinceActivity < this.idleTimeoutMs) {
+        return true;
+      }
+    }
+
+    return false;
+  }  stop() {
     if (this.idleCheckTimer) clearInterval(this.idleCheckTimer);
     if (this.checkpointTimer) clearInterval(this.checkpointTimer);
     this.endAllSessions();
