@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { SessionManager } from './sessionManager';
 import { EventBuffer } from './buffer';
 import { EventListener } from './eventListener';
 import { StatusBarManager } from './statusBarManager';
@@ -10,50 +9,20 @@ import { BackendService } from './services/BackendService';
 import { CustomReminderService } from './services/CustomReminderService';
 import { DiffService } from './services/DiffService';
 import { FileSessionTracker } from './services/FileSessionTracker';
+import { TerminalTracker } from './services/TerminalTracker';
 import { registerCustomReminderCommands } from './commands/manageCustomReminders';
 import { ICustomReminder } from './models/CustomReminder';
 
-// Track user activity state
-let lastActivityTime = Date.now();
-const INACTIVITY_THRESHOLD = 300000; // 5 minutes (production)
-let activityCheckInterval: NodeJS.Timeout | null = null;
 let statusBarManager: StatusBarManager | null = null;
 let diffService: DiffService | null = null;
 let eventBuffer: EventBuffer | null = null;
 let fileSessionTracker: FileSessionTracker | null = null;
-let lastActivityLog = 0; // Throttle activity logs
-
-// Update activity status based on user interaction
-function updateActivityStatus() {
-  if (!statusBarManager) return;
-
-  const now = Date.now();
-  const isActive = now - lastActivityTime < INACTIVITY_THRESHOLD;
-  console.log(`[Activity] ${isActive ? 'Active' : 'Idle'} (Last activity: ${new Date(lastActivityTime).toLocaleTimeString()}, ${Math.floor((now - lastActivityTime) / 1000)}s ago)`);
-  statusBarManager.updateActivityStatus(isActive);
-}
-
-// Track user activity
-function trackUserActivity(reason: string) {
-  const now = Date.now();
-  const oldTime = lastActivityTime;
-  lastActivityTime = now;
-
-  // Only log activity every 5 seconds to reduce noise
-  if (now - lastActivityLog > 5000) {
-    const timeSinceLastActivity = lastActivityTime - oldTime;
-    console.log(`[Activity] Activity detected (${reason}) | Time since last: ${timeSinceLastActivity}ms | New lastActivityTime: ${new Date(lastActivityTime).toLocaleTimeString()}`);
-    lastActivityLog = now;
-  }
-
-  updateActivityStatus();
-}
+let terminalTracker: TerminalTracker | null = null;
 
 export async function activate(ctx: vscode.ExtensionContext) {
 
   // Log available commands for debugging
   const availableCommands = await vscode.commands.getCommands(true);
-  console.log('[Extension] Available commands:', availableCommands.filter((cmd: string) => cmd.startsWith('devtimetracker.')));
 
   const cfg = vscode.workspace.getConfiguration('devtimetracker');
   const apiUrl = cfg.get<string>('apiUrl');
@@ -93,33 +62,23 @@ export async function activate(ctx: vscode.ExtensionContext) {
   );
 
   // Initialize backend service FIRST if configured (so other services can use it)
-  console.log('[Extension] Checking backend configuration...', { apiUrl, apiToken: apiToken ? '***' + apiToken.slice(-8) : 'none' });
-
   if (apiUrl) {
-
     try {
       backendService = BackendService.getInstance();
-
       const initialized = await backendService.initialize();
 
       if (initialized) {
-
         vscode.window.showInformationMessage(`✅ Connected to backend: ${apiUrl}`);
       }
     } catch (error) {
-
-      vscode.window.showWarningMessage(`❌ Failed to connect to backend: ${error}`);
+      vscode.window.showWarningMessage('❌ Failed to connect to backend. Please verify your API URL and token.');
     }
   } else {
-
     vscode.window.showWarningMessage('Dev Time Tracker: No API URL configured. Backend features disabled.');
   }
 
   // Initialize HealthService (it may use backend if available)
-
   try {
-    // Initialize HealthService
-
     healthService = HealthService.getInstance(backendService || undefined, ctx);
 
     // Verify HealthStatusBar instance
@@ -148,7 +107,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
       }
     }
   } catch (error) {
-
+    console.error('[Extension] HealthService initialization error:', error);
   }
 
   // Initialize other services with backend (if available)
@@ -219,7 +178,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
       customReminderService = CustomReminderService.getInstance(ctx, metricsService);
     }
   } else {
-
     metricsService = MetricsService.getInstance(undefined);
     gitService = GitService.getInstance(undefined);
   }
@@ -251,20 +209,13 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Initialize status bar manager as a singleton
   statusBarManager = StatusBarManager.getInstance(ctx);
 
-  // Trigger initial activity to start the session
+  // Start the status bar session (this triggers the update interval)
   if (statusBarManager) {
-    statusBarManager.updateActivityStatus(true);
-
-    // Start activity check interval
-    activityCheckInterval = setInterval(() => {
-      updateActivityStatus();
-    }, 1000); // Check every second
-
+    statusBarManager.updateActivityStatus(false); // Start as idle, FileSessionTracker will update
   }
 
-  // Initialize session manager
-  const sessionManager = new SessionManager(apiUrl || '', apiToken || '', ctx);
-  const sessionId = await sessionManager.startSession();
+  // Generate a session ID for this extension instance
+  const sessionId = `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   // Initialize diff service (conditionally based on settings)
   const enableDiffCapture = cfg.get<boolean>('tracking.enableDiffCapture', true);
@@ -281,6 +232,18 @@ export async function activate(ctx: vscode.ExtensionContext) {
   fileSessionTracker = new FileSessionTracker(eventBuffer, diffService);
   fileSessionTracker.start();
 
+  // Connect FileSessionTracker to StatusBarManager for instant idle detection
+  if (statusBarManager && fileSessionTracker) {
+    statusBarManager.setFileSessionTracker(fileSessionTracker);
+  }
+
+  // Initialize terminal tracker (optional, based on settings)
+  const enableTerminalTracking = cfg.get<boolean>('tracking.enableTerminalTracking', true);
+  if (enableTerminalTracking) {
+    terminalTracker = new TerminalTracker(eventBuffer, fileSessionTracker);
+    terminalTracker.start();
+  }
+
   // Initialize event listener with FileSessionTracker
   const listener = new EventListener(ctx, eventBuffer, sessionId, fileSessionTracker);
   listener.start();
@@ -288,83 +251,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Start the event buffer
   eventBuffer.start();
 
-  // Set up activity tracking
-  const activityEvents: vscode.Disposable[] = [
-    // Editor events - Track typing and content changes
-    vscode.window.onDidChangeActiveTextEditor((e) => {
-
-      trackUserActivity('editor changed');
-    }),
-
-    vscode.workspace.onDidChangeTextDocument((e) => {
-      if (e.contentChanges.length > 0) {
-        trackUserActivity('document changed');
-      }
-    }),
-
-    // Selection changes - detect mouse clicks and keyboard navigation
-    vscode.window.onDidChangeTextEditorSelection((e) => {
-      trackUserActivity('selection changed');
-    }),
-
-    // Visible ranges changed - detect scrolling
-    vscode.window.onDidChangeTextEditorVisibleRanges((e) => {
-      trackUserActivity('scrolling');
-    }),
-
-    // Terminal events
-    vscode.window.onDidChangeTerminalState(() => {
-      trackUserActivity('terminal state changed');
-    }),
-
-    vscode.window.onDidOpenTerminal(() => {
-      trackUserActivity('terminal opened');
-    }),
-
-    vscode.window.onDidCloseTerminal(() => {
-      trackUserActivity('terminal closed');
-    }),
-
-    // Window events
-    vscode.window.onDidChangeWindowState((e) => {
-      if (e.focused) {
-        trackUserActivity('window focus changed');
-      }
-    }),
-
-    // Workspace events
-    vscode.workspace.onDidOpenTextDocument(() => {
-      trackUserActivity('document opened');
-    }),
-
-    vscode.workspace.onDidCloseTextDocument(() => {
-      trackUserActivity('document closed');
-    }),
-
-    vscode.workspace.onDidSaveTextDocument(() => {
-      trackUserActivity('document saved');
-    }),
-
-    // View column changes - detect panel/sidebar interactions
-    vscode.window.onDidChangeTextEditorViewColumn(() => {
-      trackUserActivity('view column changed');
-    })
-  ];
-
-  // Add activity event listeners to subscriptions
-  activityEvents.forEach(disposable => ctx.subscriptions.push(disposable));
-
-  // Clean up on deactivation
-  ctx.subscriptions.push({
-    dispose: () => {
-      if (activityCheckInterval) {
-        clearInterval(activityCheckInterval);
-      }
-      SessionManager.endSession();
-      MetricsService.getInstance().dispose();
-      HealthService.getInstance().dispose();
-    }
-  });
+  // Activity tracking is handled by FileSessionTracker through EventListener
+  // No need for separate activity event listeners
 
   // Register other commands
   const disposables: vscode.Disposable[] = [];
@@ -384,7 +272,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
         await backendService.sendEvent('test', { message: 'Test from extension' });
         vscode.window.showInformationMessage('✓ Backend connection working!');
       } catch (error) {
-        vscode.window.showErrorMessage(`✗ Backend connection failed: ${error}`);
+        // Show safe error message
+        vscode.window.showErrorMessage('✗ Backend connection failed. Please check your API settings.');
       }
     } else {
       vscode.window.showWarningMessage('Backend service not initialized');
@@ -449,9 +338,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Register custom reminder commands
   registerCustomReminderCommands(ctx);
 
-  // Initial update of activity status
-  updateActivityStatus();
-
   // Log successful activation
 
   // Return the public API if needed
@@ -462,20 +348,21 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
 export async function deactivate() {
 
-  // Clear activity check interval
-  if (activityCheckInterval) {
-    clearInterval(activityCheckInterval);
-    activityCheckInterval = null;
-  }
-
   // Dispose of services
   MetricsService.getInstance().dispose();
   HealthService.getInstance().dispose();
   CustomReminderService.getInstance().dispose();
 
+
   if (diffService) {
     diffService.dispose();
     diffService = null;
+  }
+
+  // Stop terminal tracker
+  if (terminalTracker) {
+    terminalTracker.stop();
+    terminalTracker = null;
   }
 
   // End all active file sessions
@@ -483,7 +370,4 @@ export async function deactivate() {
     fileSessionTracker.endAllSessions();
     fileSessionTracker = null;
   }
-
-  // End current session
-  await SessionManager.endSession();
 }

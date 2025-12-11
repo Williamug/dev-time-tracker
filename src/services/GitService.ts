@@ -92,7 +92,7 @@ export class GitService {
       for (const folder of workspaceFolders) {
         const repoPath = folder.uri.fsPath;
         const commits = await this.getRecentCommits(repoPath);
-        
+
         if (commits.length > 0 && commits[0].hash !== this.lastCommitHash) {
           this.lastCommitHash = commits[0].hash;
           this.updateMetrics(commits[0]);
@@ -174,7 +174,7 @@ export class GitService {
 
   private updateMetrics(commit: GitCommit) {
     const metrics = this.metricsCollector.getMetrics();
-    
+
     // Update code metrics
     if (metrics.code) {
       this.metricsCollector.updateMetrics({

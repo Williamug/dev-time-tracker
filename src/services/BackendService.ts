@@ -27,8 +27,6 @@ export class BackendService {
     const apiUrl = this.config.get<string>('apiUrl');
     const apiToken = this.config.get<string>('apiToken');
 
-    console.log('[BackendService] Constructor - API Token (first 10 chars):', apiToken?.substring(0, 10) + '...');
-
     if (!apiUrl) {
       throw new Error('API URL is not configured. Please set devtimetracker.apiUrl in your settings.');
     }
@@ -52,7 +50,6 @@ export class BackendService {
         const token = this.config.get('apiToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
-          console.log('[BackendService] Using token:', token?.toString().substring(0, 10) + '...');
         } else {
 
         }
@@ -125,7 +122,6 @@ export class BackendService {
       await this.loadSettings();
       return true;
     } catch (error) {
-
       return false;
     }
   }
@@ -238,7 +234,6 @@ export class BackendService {
       } catch (error) {
         attempts++;
         lastError = error as Error;
-        console.error(`Failed to send event (attempt ${attempts}/${maxRetries}):`, error);
 
         if (attempts < maxRetries) {
           // Exponential backoff: wait 1s, 2s, 4s, etc.

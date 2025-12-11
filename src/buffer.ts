@@ -43,18 +43,22 @@ export class EventBuffer {
     // Remove trailing slashes from API URL
     this.apiUrl = apiUrl.replace(/\/+$/, '');
 
-    // Extract project name from workspace
-    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
-    if (workspaceFolder) {
-      this.projectName = workspaceFolder.name;
-    }
+    // Update project name dynamically
+    this.updateProjectName();
 
     this.diffService = diffService || null;
 
   }
 
-  start() {
+  /**
+   * Update project name from current workspace
+   */
+  private updateProjectName() {
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    this.projectName = workspaceFolder?.name || 'Unknown Project';
+  }
 
+  start() {
     this.timer = setInterval(() => this.flush(), this.intervalMs);
 
     // Update current file info when editor changes
@@ -65,24 +69,39 @@ export class EventBuffer {
       }
     });
 
+    // Update project name when workspace folders change
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      this.updateProjectName();
+    });
+
     // Flush on document close
     vscode.workspace.onDidCloseTextDocument(() => this.flush());
   }
 
   add(
-    eventType: 'typing' | 'click',
+    eventType: 'typing' | 'click' | 'terminal_activity',
     extraData?: {
       keystrokes?: number;
       lines_added?: number;
       lines_removed?: number;
       clicks?: number;
+      duration_seconds?: number; // Optional explicit duration from session tracker
+      terminal_name?: string; // For terminal activities
     }
   ) {
+    // Handle terminal activities separately (no file editor required)
+    if (eventType === 'terminal_activity') {
+      this.addTerminalActivity(extraData);
+      return;
+    }
+
     const editor = vscode.window.activeTextEditor;
     if (!editor) return;
 
     const now = Date.now();
-    const duration = Math.round((now - this.lastEventTime) / 1000); // seconds
+
+    // Use explicit duration if provided (from session tracker), otherwise calculate
+    const duration = extraData?.duration_seconds ?? Math.round((now - this.lastEventTime) / 1000);
     const startedAt = new Date(now - (duration * 1000)).toISOString();
     const endedAt = new Date(now).toISOString();
     this.lastEventTime = now;
@@ -125,14 +144,12 @@ export class EventBuffer {
     this.buffer.push(activity);
 
     if (this.buffer.length >= this.batchSize) {
-
       this.flush();
     }
   }
 
   private async flush() {
     if (!this.buffer.length) {
-
       return;
     }
 
@@ -152,6 +169,7 @@ export class EventBuffer {
 
       if (!response.ok) {
         const errorText = await response.text();
+        console.error('[EventBuffer] Flush failed with status:', response.status, errorText);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
@@ -165,14 +183,60 @@ export class EventBuffer {
       // Re-queue events on failure
       this.buffer.unshift(...batch);
 
-      // Show error notification
-      vscode.window.showErrorMessage(`Failed to sync activities: ${err}`);
+      // Log detailed error for debugging (not shown to user)
+      console.error('Failed to sync activities:', err);
+
+      // Show safe error notification without exposing internal details
+      vscode.window.showErrorMessage('Failed to sync activities. Please check your connection and API token.');
     }
   }
 
   setDiffService(diffService: DiffService | null) {
     this.diffService = diffService;
 
+  }
+
+  /**
+   * Add terminal activity to buffer
+   */
+  private addTerminalActivity(extraData?: {
+    duration_seconds?: number;
+    terminal_name?: string;
+  }) {
+    const now = Date.now();
+    const duration = extraData?.duration_seconds ?? 1;
+    const startedAt = new Date(now - (duration * 1000)).toISOString();
+    const endedAt = new Date(now).toISOString();
+
+    const editorInfo = this.getEditorInfo();
+    const osInfo = this.getOperatingSystem();
+
+    const activity: CodingActivityEvent = {
+      event_type: 'typing', // Backend expects 'typing' or 'click', use typing for terminal
+      duration: Math.max(1, duration),
+      file_path: `terminal://${extraData?.terminal_name || 'unknown'}`,
+      language: 'terminal',
+      project_name: this.projectName,
+      editor: editorInfo,
+      operating_system: osInfo,
+      started_at: startedAt,
+      ended_at: endedAt,
+      keystrokes: 0,
+      lines_added: 0,
+      lines_removed: 0,
+      metadata: {
+        session_id: this.sessionId,
+        terminal_name: extraData?.terminal_name || 'unknown',
+        activity_type: 'terminal'
+      }
+    };
+
+    this.buffer.push(activity);
+
+    // Auto-flush if buffer is full
+    if (this.buffer.length >= this.batchSize) {
+      this.flush();
+    }
   }
 
   /**

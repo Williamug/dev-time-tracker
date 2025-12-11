@@ -20,7 +20,6 @@ export class EventListener {
   ) {}
 
   start() {
-
     // Track typing events with debouncing
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
