@@ -18,12 +18,19 @@ export class SessionManager {
   }
 
   async startSession(): Promise<string> {
+    // Get project name from workspace
+    const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
+    const projectName = workspaceFolder?.name;
+
     const res = await fetch(`${SessionManager.apiUrl}/api/sessions/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${SessionManager.apiToken}`
-      }
+      },
+      body: JSON.stringify({
+        project_name: projectName
+      })
     });
     const data = await res.json() as SessionResponse;
     const session_id = data.session_id;
