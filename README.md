@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="images/logo.png" alt="Dev Time Tracker Logo" width="100"/>
+  <img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/logo.png" alt="Dev Time Tracker Logo" width="100"/>
 
   # Dev Time Tracker
 
@@ -7,8 +7,8 @@
 Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.
 
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
-[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/WilliamAsaba.dev-time-tracker?style=flat&label=Installs&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/WilliamAsaba.dev-time-tracker?style=flat&label=Rating&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
+<!-- [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/WilliamAsaba.dev-time-tracker?style=flat&label=Installs&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker) -->
 
 </div>
 
@@ -28,7 +28,7 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 <div align="center">
 
 ###  Web Dashboard - Real-Time Analytics
-<img src="images/Screenshot 2.png" alt="Activity Timeline" width="800"/>
+<img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/Screenshot%202.png" alt="Activity Timeline" width="800"/>
 
 
 *Beautiful charts showing your coding patterns, project breakdowns, and productivity insights*
@@ -37,7 +37,7 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 
 
 ### Activity Details - Code Diff Tracking
-<img src="images/Screenshot 1.png" alt="Dashboard Analytics" width="800"/>
+<img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/Screenshot%201.png" alt="Dashboard Analytics" width="800"/>
 
 *Complete activity history with code diffs, file changes, and time tracking*
 
