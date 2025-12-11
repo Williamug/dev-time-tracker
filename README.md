@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/logo.png" alt="Dev Time Tracker Logo" width="100"/>
+  <img src="https://raw.githubusercontent.com/williamug/dev-time-tracker/main/images/logo.png" alt="Dev Time Tracker Logo" width="100"/>
 
   # Dev Time Tracker
 
@@ -27,8 +27,11 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 
 <div align="center">
 
+### Status Bar - Real-Time Tracking
+<img src="https://raw.githubusercontent.com/williamug/dev-time-tracker/main/images/Screenshot_3.png" alt="Status Bar Tracking" width="800"/>
+
 ###  Web Dashboard - Real-Time Analytics
-<img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/Screenshot%202.png" alt="Activity Timeline" width="800"/>
+<img src="https://raw.githubusercontent.com/williamug/dev-time-tracker/main/images/Screenshot_2.png" alt="Activity Timeline" width="800"/>
 
 
 *Beautiful charts showing your coding patterns, project breakdowns, and productivity insights*
@@ -37,7 +40,7 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 
 
 ### Activity Details - Code Diff Tracking
-<img src="https://raw.githubusercontent.com/Williamug/dev-time-tracker/main/dev-time-tracker/images/Screenshot%201.png" alt="Dashboard Analytics" width="800"/>
+<img src="https://raw.githubusercontent.com/williamug/dev-time-tracker/main/images/Screenshot_1.png" alt="Dashboard Analytics" width="800"/>
 
 *Complete activity history with code diffs, file changes, and time tracking*
 
