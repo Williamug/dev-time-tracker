@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { MetricsService } from './services/MetricsService';
+import { FileSessionTracker } from './services/FileSessionTracker';
 
 interface StatusBarItems {
     activity: vscode.StatusBarItem;
@@ -21,6 +22,7 @@ export class StatusBarManager {
     private lastActiveTime: Date | null = null;
     private idleTime = 0; // Total idle time in milliseconds
     private updateInterval: NodeJS.Timeout | null = null;
+    private fileSessionTracker: FileSessionTracker | null = null;
     private pomodoroConfig = {
         workDuration: 25,
         shortBreakDuration: 5,
@@ -193,7 +195,6 @@ export class StatusBarManager {
                 this.statusBarItems.activity.tooltip = 'You are actively coding';
 
                 if (!this.sessionStartTime) {
-
                     this.startNewSession();
                 }
             } else {
@@ -202,10 +203,22 @@ export class StatusBarManager {
                 this.statusBarItems.activity.backgroundColor = new vscode.ThemeColor('statusBar.background');
                 this.statusBarItems.activity.color = new vscode.ThemeColor('statusBar.foreground');
                 this.statusBarItems.activity.tooltip = 'Waiting for activity...';
+
+                // Ensure update interval is running even when idle
+                if (!this.updateInterval && !this.sessionStartTime) {
+                    this.startNewSession();
+                }
             }
         } catch (error) {
 
         }
+    }
+
+    /**
+     * Set the FileSessionTracker for instant idle detection
+     */
+    public setFileSessionTracker(tracker: FileSessionTracker): void {
+        this.fileSessionTracker = tracker;
     }
 
     private startNewSession(): void {
@@ -225,6 +238,16 @@ export class StatusBarManager {
 
             try {
                 const now = new Date();
+
+                // Check FileSessionTracker for instant idle detection (3 seconds)
+                // This gives us more accurate idle status than the old method
+                const hasRecentActivity = this.fileSessionTracker?.hasRecentActivity() ?? false;
+
+                // Update active status based on FileSessionTracker
+                if (hasRecentActivity !== this.isActive) {
+                    this.updateActivityStatus(hasRecentActivity);
+                }
+
                 let activeTime = now.getTime() - this.sessionStartTime.getTime() - this.idleTime;
 
                 // If we're currently active, update the last active time
