@@ -8,7 +8,8 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
 [![Visual Studio Marketplace Rating](https://img.shields.io/visual-studio-marketplace/r/WilliamAsaba.dev-time-tracker?style=flat&label=Rating&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
-<!-- [![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/WilliamAsaba.dev-time-tracker?style=flat&label=Installs&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker) -->
+![Open VSX Downloads](https://img.shields.io/open-vsx/dt/WilliamAsaba/dev-time-tracker?style=flat&label=Open%20VSX%20Installs&logo=visual-studio-code)
+[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Installs&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
 
 </div>
 
@@ -241,7 +242,7 @@ The extension connects to our cloud service for data storage and analytics.
    | **Team** | $18/dev/month | • Everything in Pro<br>• Up to 100 developers<br>• Team dashboard & analytics<br>• Team commit & PR stats<br>• Private leaderboards<br>• Export team dashboards<br>• Custom privacy & access control<br>• Team integrations |
    | **Business** | $21/dev/month | • Everything in Team<br>• 100-1,000 developers<br>• Onboarding support & training<br>• Advanced team insights<br>• Prioritized support (email & zoom)<br>• Customized integrations<br>• Dedicated account manager |
 
-   **💼 Volume Discounts Available:**
+   **Volume Discounts Available:**
    - 10-25 developers: 10% off
    - 26-50 developers: 15% off
    - 51-100 developers: 20% off
@@ -277,7 +278,7 @@ If you're on the free tier, you'll see friendly notifications when approaching l
   - Older data automatically archived
   - Upgrade for longer history
 
-**💡 Tips for Free Tier Users:**
+**Tips for Free Tier Users:**
 - Monitor your usage in real-time from the dashboard
 - Receive notifications at 80% and 100% of your monthly limit
 - Monthly limits reset at midnight in your timezone
