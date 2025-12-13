@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+out/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
@@ -10,14 +11,6 @@ vsc-extension-quickstart.md
 **/*.ts
 **/.vscode-test.*
 node_modules/**
-!node_modules/axios/**
-!node_modules/follow-redirects/**
-!node_modules/form-data/**
-!node_modules/combined-stream/**
-!node_modules/delayed-stream/**
-!node_modules/mime-types/**
-!node_modules/mime-db/**
-!node_modules/proxy-from-env/**
 coverage/**
 test/**
 .github/**
@@ -25,7 +18,6 @@ test/**
 *.vsix
 .eslintrc.json
 jest.config.js
-CHANGELOG.md
 HEALTH-REMINDERS.md
 DEBUG-TEST.md
 TERMINAL-TRACKING.md
@@ -33,6 +25,7 @@ TERMINAL-TRACKING.md
 **/*.test.ts
 **/__mocks__/**
 **/mocks/**
+webpack.config.js
 
 # Important: DO NOT ignore images folder - needed for README
 # images/ should be included
