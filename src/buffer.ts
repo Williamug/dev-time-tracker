@@ -34,11 +34,22 @@ export class EventBuffer {
   private projectName: string = '';
   private diffService: DiffService | null = null;
 
+  // Circuit breaker state
+  private failureCount = 0;
+  private lastFailureTime = 0;
+  private circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+  private readonly MAX_FAILURES = 5;
+  private readonly CIRCUIT_RESET_TIMEOUT = 60000; // 1 minute
+
+  // Persistent storage
+  private context?: vscode.ExtensionContext;
+
   constructor(
     private apiUrl: string,
     private apiToken: string,
     private sessionId: string,
-    diffService?: DiffService | null
+    diffService?: DiffService | null,
+    context?: vscode.ExtensionContext
   ) {
     // Remove trailing slashes from API URL
     this.apiUrl = apiUrl.replace(/\/+$/, '');
@@ -47,7 +58,10 @@ export class EventBuffer {
     this.updateProjectName();
 
     this.diffService = diffService || null;
+    this.context = context;
 
+    // Load any pending activities from storage
+    this.loadPendingActivities();
   }
 
   /**
@@ -56,6 +70,83 @@ export class EventBuffer {
   private updateProjectName() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     this.projectName = workspaceFolder?.name || 'Unknown Project';
+  }
+
+  /**
+   * Load pending activities from persistent storage
+   */
+  private async loadPendingActivities() {
+    if (!this.context) return;
+
+    try {
+      const pending = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
+      if (pending.length > 0) {
+        console.log(`[EventBuffer] Loaded ${pending.length} pending activities from storage`);
+        this.buffer.push(...pending);
+        // Clear storage after loading
+        await this.context.globalState.update('pending_activities', []);
+      }
+    } catch (error) {
+      console.error('[EventBuffer] Failed to load pending activities:', error);
+    }
+  }
+
+  /**
+   * Persist activities to storage
+   */
+  private async persistToStorage(batch: CodingActivityEvent[]) {
+    if (!this.context) return;
+
+    try {
+      const existing = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
+      await this.context.globalState.update('pending_activities', [...existing, ...batch]);
+      console.log(`[EventBuffer] Persisted ${batch.length} activities to storage`);
+    } catch (error) {
+      console.error('[EventBuffer] Failed to persist activities:', error);
+    }
+  }
+
+  /**
+   * Check circuit breaker state
+   */
+  private isCircuitOpen(): boolean {
+    if (this.circuitState === 'OPEN') {
+      const timeSinceFailure = Date.now() - this.lastFailureTime;
+      if (timeSinceFailure > this.CIRCUIT_RESET_TIMEOUT) {
+        this.circuitState = 'HALF_OPEN';
+        console.log('[EventBuffer] Circuit breaker entering HALF_OPEN state');
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Record successful request
+   */
+  private onSuccess() {
+    if (this.circuitState === 'HALF_OPEN') {
+      this.circuitState = 'CLOSED';
+      console.log('[EventBuffer] Circuit breaker CLOSED');
+    }
+    this.failureCount = 0;
+  }
+
+  /**
+   * Record failed request
+   */
+  private onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= this.MAX_FAILURES) {
+      this.circuitState = 'OPEN';
+      console.log(`[EventBuffer] Circuit breaker OPEN after ${this.failureCount} failures`);
+      vscode.window.showWarningMessage(
+        'Activity sync paused due to connection issues. Will retry in 1 minute.'
+      );
+    }
   }
 
   start() {
@@ -153,6 +244,12 @@ export class EventBuffer {
       return;
     }
 
+    // Check circuit breaker
+    if (this.isCircuitOpen()) {
+      console.log('[EventBuffer] Circuit breaker is OPEN, skipping flush');
+      return;
+    }
+
     const batch = this.buffer.splice(0);
     const endpoint = `${this.apiUrl}/api/coding-activities/batch`;
 
@@ -174,20 +271,24 @@ export class EventBuffer {
       }
 
       const result = await response.json();
+      this.onSuccess();
 
       // Show success notification (optional)
       vscode.window.setStatusBarMessage(`✓ Synced ${batch.length} activities`, 3000);
 
     } catch (err) {
+      this.onFailure();
 
-      // Re-queue events on failure
-      this.buffer.unshift(...batch);
+      // Persist to storage instead of re-queuing to prevent memory issues
+      await this.persistToStorage(batch);
 
       // Log detailed error for debugging (not shown to user)
-      console.error('Failed to sync activities:', err);
+      console.error('[EventBuffer] Failed to sync activities:', err);
 
       // Show safe error notification without exposing internal details
-      vscode.window.showErrorMessage('Failed to sync activities. Please check your connection and API token.');
+      if (this.circuitState !== 'OPEN') {
+        vscode.window.showWarningMessage('Failed to sync activities. Saved locally and will retry.');
+      }
     }
   }
 

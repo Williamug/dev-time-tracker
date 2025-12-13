@@ -28,6 +28,7 @@ export class FileSessionTracker {
   private readonly sessionEndTimeoutMs = 5 * 60 * 1000; // 5 minutes idle = session end
   private readonly checkpointIntervalMs = 5 * 60 * 1000; // 5 minutes between checkpoints
   private readonly idleCheckIntervalMs = 1 * 1000; // Check for idle sessions every second
+  private readonly MAX_SESSIONS = 50; // Prevent memory leak
 
   constructor(
     private buffer: EventBuffer,
@@ -64,6 +65,14 @@ export class FileSessionTracker {
     let session = this.activeSessions.get(filePath);
 
     if (!session) {
+      // Enforce session limit to prevent memory leak
+      if (this.activeSessions.size >= this.MAX_SESSIONS) {
+        const oldestSession = this.findOldestIdleSession();
+        if (oldestSession) {
+          this.endSession(oldestSession);
+        }
+      }
+
       // Start new session
       session = {
         filePath,
@@ -235,7 +244,26 @@ export class FileSessionTracker {
     }
 
     return false;
-  }  stop() {
+  }
+
+  /**
+   * Find the oldest idle session for removal when limit is reached
+   */
+  private findOldestIdleSession(): string | null {
+    let oldestPath: string | null = null;
+    let oldestTime = Infinity;
+
+    for (const [filePath, session] of this.activeSessions.entries()) {
+      if (session.lastActivityTime.getTime() < oldestTime) {
+        oldestTime = session.lastActivityTime.getTime();
+        oldestPath = filePath;
+      }
+    }
+
+    return oldestPath;
+  }
+
+  stop() {
     if (this.idleCheckTimer) clearInterval(this.idleCheckTimer);
     if (this.checkpointTimer) clearInterval(this.checkpointTimer);
     this.endAllSessions();

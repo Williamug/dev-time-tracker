@@ -227,8 +227,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   }
 
-  // Initialize event buffer and FileSessionTracker
-  eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService);
+  // Initialize event buffer and FileSessionTracker with context for persistence
+  eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService, ctx);
   fileSessionTracker = new FileSessionTracker(eventBuffer, diffService);
   fileSessionTracker.start();
 
