@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
-  "version": "2.0.6",
+  "version": "2.0.7",
   "repository": {
     "type": "git",
     "url": "https://github.com/williamug/dev-time-tracker.git"
