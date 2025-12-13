@@ -4,6 +4,56 @@ All notable changes to the "dev-time-tracker" extension will be documented in th
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [2.0.7] - 2025-12-13
+
+### Fixed
+- **Dependencies**: Fixed missing `combined-stream` and related dependencies causing activation failure in Windsurf editor
+  - Added `combined-stream`, `delayed-stream`, `mime-types`, and `mime-db` to package
+  - Extension now activates properly in all VS Code-based editors
+
+## [2.0.6] - 2025-12-11
+
+### Added
+- **Terminal Activity Tracking**: New feature to track time spent in integrated terminals
+  - Monitors terminal focus and activity
+  - Records terminal sessions with 3-second idle detection
+  - Sends terminal activity data to backend as `terminal_activity` events
+  - Added `devtimetracker.tracking.enableTerminalTracking` setting (enabled by default)
+  - Note: Due to VS Code API limitations, only tracks terminal focus time, not actual commands (for security)
+
+### Fixed
+- **Token Authentication**: Resolved expired API token issue causing activity tracking failure
+  - Improved error logging for backend connection issues
+  - Better handling of authentication failures
+  - Clear error messages when token is invalid
+
+### Changed
+- **Session Tracking**: Enhanced FileSessionTracker with instant idle detection (3 seconds)
+  - Timer now pauses immediately when inactive
+  - More accurate coding time measurement
+  - 5-minute checkpoint intervals for activity submission
+  - Improved session state management
+
+### Improved
+- **Code Quality**: Removed excessive debug logging for cleaner console output
+  - Streamlined logs across EventListener, FileSessionTracker, and EventBuffer
+  - Kept essential error logging for troubleshooting
+  - Better performance with reduced console overhead
+
+## [2.0.4] - 2025-12-11
+
+### Fixed
+- **Marketplace Publishing**: Resolved timeout issues during extension publishing
+  - Optimized `.vscodeignore` to exclude unnecessary files
+  - Reduced package size from 426 files to 162 files (62% reduction)
+  - Package size now 1.05MB (down from larger builds)
+
+### Changed
+- **Image Handling**: Updated README images to use GitHub URLs for marketplace display
+  - Fixed broken image links on VS Code Marketplace
+  - Images now properly included in extension package
+  - Renamed image files to remove spaces for better URL compatibility
+
 ## [1.5.4] - 2025-12-02
 
 ### Fixed
