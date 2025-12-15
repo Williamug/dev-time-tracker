@@ -24,7 +24,7 @@ export class FileSessionTracker {
   private checkpointTimer?: NodeJS.Timeout;
 
   // Configuration
-  private readonly idleTimeoutMs = 3 * 1000; // 3 seconds idle = pause timer
+  private readonly idleTimeoutMs = 10 * 1000; // 10 seconds idle = pause timer
   private readonly sessionEndTimeoutMs = 5 * 60 * 1000; // 5 minutes idle = session end
   private readonly checkpointIntervalMs = 5 * 60 * 1000; // 5 minutes between checkpoints
   private readonly idleCheckIntervalMs = 1 * 1000; // Check for idle sessions every second
@@ -94,12 +94,12 @@ export class FileSessionTracker {
       // Update accumulated duration (time since last activity)
       const timeSinceLastActivity = (now.getTime() - session.lastActivityTime.getTime()) / 1000;
 
-      // Only accumulate time if activity was recent (within 3 second idle timeout)
+      // Only accumulate time if activity was recent (within 10 second idle timeout)
       // This ensures we only count active coding time, not idle time
       if (timeSinceLastActivity < this.idleTimeoutMs / 1000) {
         session.accumulatedDurationSeconds += timeSinceLastActivity;
       }
-      // If more than 3 seconds have passed, duration pauses (we don't accumulate)
+      // If more than 10 seconds have passed, duration pauses (we don't accumulate)
     }
 
     // Update metrics
