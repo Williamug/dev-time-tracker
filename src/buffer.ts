@@ -1,5 +1,10 @@
 import * as vscode from 'vscode';
+import * as zlib from 'zlib';
+import { promisify } from 'util';
 import { DiffService } from './services/DiffService';
+import { StatusBarManager } from './statusBarManager';
+
+const gzip = promisify(zlib.gzip);
 
 export interface CodingActivityEvent {
   event_type: 'typing' | 'click';
@@ -27,18 +32,45 @@ export class EventBuffer {
   private buffer: CodingActivityEvent[] = [];
   private timer?: NodeJS.Timeout;
   private readonly intervalMs = 30_000;   // flush every 30s
-  private readonly batchSize = 20;
+  private batchSize = 20; // Now dynamic, not readonly
   private lastEventTime = Date.now();
   private currentFile: string = '';
   private currentLanguage: string = '';
   private projectName: string = '';
   private diffService: DiffService | null = null;
 
+  // Circuit breaker state
+  private failureCount = 0;
+  private lastFailureTime = 0;
+  private circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN' = 'CLOSED';
+  private readonly MAX_FAILURES = 5;
+  private readonly CIRCUIT_RESET_TIMEOUT = 60000; // 1 minute
+
+  // Persistent storage
+  private context?: vscode.ExtensionContext;
+
+  // Adaptive batching - network condition tracking
+  private avgResponseTime = 500; // milliseconds
+  private lastResponseTime = 0;
+  private consecutiveSuccesses = 0;
+  private consecutiveFailures = 0;
+  private readonly MIN_BATCH_SIZE = 10;
+  private readonly MAX_BATCH_SIZE = 100;
+  private readonly OPTIMAL_RESPONSE_TIME = 1000; // 1 second
+
+  // Compression settings
+  private enableCompression = true; // Enabled with Laravel DecompressGzipRequest middleware
+  private compressionThreshold = 1024; // Compress if payload > 1KB
+
+  // Status bar manager for UI updates
+  private statusBarManager?: StatusBarManager;
+
   constructor(
     private apiUrl: string,
     private apiToken: string,
     private sessionId: string,
-    diffService?: DiffService | null
+    diffService?: DiffService | null,
+    context?: vscode.ExtensionContext
   ) {
     // Remove trailing slashes from API URL
     this.apiUrl = apiUrl.replace(/\/+$/, '');
@@ -47,7 +79,13 @@ export class EventBuffer {
     this.updateProjectName();
 
     this.diffService = diffService || null;
+    this.context = context;
 
+    // Get StatusBarManager instance (may be null if not initialized yet)
+    this.statusBarManager = StatusBarManager.getInstance() || undefined;
+
+    // Load any pending activities from storage
+    this.loadPendingActivities();
   }
 
   /**
@@ -56,6 +94,118 @@ export class EventBuffer {
   private updateProjectName() {
     const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
     this.projectName = workspaceFolder?.name || 'Unknown Project';
+  }
+
+  /**
+   * Load pending activities from persistent storage
+   */
+  private async loadPendingActivities() {
+    if (!this.context) return;
+
+    try {
+      const pending = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
+      if (pending.length > 0) {
+        console.log(`[EventBuffer] Loaded ${pending.length} pending activities from storage`);
+        this.buffer.push(...pending);
+        // Clear storage after loading
+        await this.context.globalState.update('pending_activities', []);
+        // Update status bar with pending count
+        this.updateStatusBar();
+      }
+    } catch (error) {
+      console.error('[EventBuffer] Failed to load pending activities:', error);
+    }
+  }
+
+  /**
+   * Get pending activities count (for status bar)
+   */
+  public getPendingCount(): number {
+    return this.buffer.length;
+  }
+
+  /**
+   * Update status bar with pending activities count
+   */
+  private updateStatusBar() {
+    const isOffline = this.circuitState === 'OPEN';
+
+    // Update via StatusBarManager if available
+    if (this.statusBarManager) {
+      this.statusBarManager.updateSyncQueueStatus(this.buffer.length, isOffline);
+    }
+
+    // Also show temporary message for significant changes
+    if (this.buffer.length > 0 && this.buffer.length % 10 === 0) {
+      const icon = isOffline ? '⚠️' : '📤';
+      const status = isOffline ? 'offline' : 'queued';
+      vscode.window.setStatusBarMessage(
+        `${icon} ${this.buffer.length} activities ${status}`,
+        3000
+      );
+    }
+  }
+
+  /**
+   * Persist activities to storage
+   */
+  private async persistToStorage(batch: CodingActivityEvent[]) {
+    if (!this.context) return;
+
+    try {
+      const existing = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
+      await this.context.globalState.update('pending_activities', [...existing, ...batch]);
+      console.log(`[EventBuffer] Persisted ${batch.length} activities to storage`);
+    } catch (error) {
+      console.error('[EventBuffer] Failed to persist activities:', error);
+    }
+  }
+
+  /**
+   * Check circuit breaker state
+   */
+  private isCircuitOpen(): boolean {
+    if (this.circuitState === 'OPEN') {
+      const timeSinceFailure = Date.now() - this.lastFailureTime;
+      if (timeSinceFailure > this.CIRCUIT_RESET_TIMEOUT) {
+        this.circuitState = 'HALF_OPEN';
+        console.log('[EventBuffer] Circuit breaker entering HALF_OPEN state');
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Record successful request
+   */
+  private onSuccess() {
+    if (this.circuitState === 'HALF_OPEN') {
+      this.circuitState = 'CLOSED';
+      console.log('[EventBuffer] Circuit breaker CLOSED');
+      // Update status bar to show we're back online
+      this.updateStatusBar();
+    }
+    this.failureCount = 0;
+  }
+
+  /**
+   * Record failed request
+   */
+  private onFailure() {
+    this.failureCount++;
+    this.lastFailureTime = Date.now();
+
+    if (this.failureCount >= this.MAX_FAILURES) {
+      this.circuitState = 'OPEN';
+      console.log(`[EventBuffer] Circuit breaker OPEN after ${this.failureCount} failures`);
+      // Update status bar to show offline state
+      this.updateStatusBar();
+      vscode.window.showWarningMessage(
+        'Activity sync paused due to connection issues. Will retry in 1 minute.'
+      );
+    }
   }
 
   start() {
@@ -143,6 +293,11 @@ export class EventBuffer {
 
     this.buffer.push(activity);
 
+    // Update status bar when buffer size changes
+    if (this.buffer.length > 0 && this.buffer.length % 5 === 0) {
+      this.updateStatusBar();
+    }
+
     if (this.buffer.length >= this.batchSize) {
       this.flush();
     }
@@ -153,19 +308,54 @@ export class EventBuffer {
       return;
     }
 
+    // Check circuit breaker
+    if (this.isCircuitOpen()) {
+      console.log('[EventBuffer] Circuit breaker is OPEN, skipping flush');
+      this.updateStatusBar(); // Show user how many are queued
+      return;
+    }
+
     const batch = this.buffer.splice(0);
     const endpoint = `${this.apiUrl}/api/coding-activities/batch`;
+    const startTime = Date.now();
 
     try {
+      const payload = JSON.stringify({ activities: batch });
+      const payloadSize = Buffer.byteLength(payload, 'utf8');
+
+      // Prepare request body and headers
+      let body: string | Buffer = payload;
+      const headers: Record<string, string> = {
+        'Accept': 'application/json',
+        'Authorization': `Bearer ${this.apiToken}`
+      };
+
+      // Compress if enabled and payload is large enough
+      if (this.enableCompression && payloadSize > this.compressionThreshold) {
+        try {
+          const compressed = await gzip(Buffer.from(payload, 'utf8'));
+          body = compressed;
+          headers['Content-Type'] = 'application/json';
+          headers['Content-Encoding'] = 'gzip';
+          const compressionRatio = ((1 - compressed.length / payloadSize) * 100).toFixed(1);
+          console.log(`[EventBuffer] Compressed ${payloadSize} bytes → ${compressed.length} bytes (${compressionRatio}% reduction)`);
+        } catch (compressionError) {
+          console.error('[EventBuffer] Compression failed, sending uncompressed:', compressionError);
+          headers['Content-Type'] = 'application/json';
+          body = payload;
+        }
+      } else {
+        headers['Content-Type'] = 'application/json';
+      }
+
       const response = await fetch(endpoint, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'Authorization': `Bearer ${this.apiToken}`
-        },
-        body: JSON.stringify({ activities: batch })
+        headers,
+        body
       });
+
+      const responseTime = Date.now() - startTime;
+      this.lastResponseTime = responseTime;
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -174,20 +364,74 @@ export class EventBuffer {
       }
 
       const result = await response.json();
+      this.onSuccess();
+      this.adaptBatchSize(responseTime, true);
 
-      // Show success notification (optional)
-      vscode.window.setStatusBarMessage(`✓ Synced ${batch.length} activities`, 3000);
+      // Update status bar to reflect successful sync (may hide if buffer is empty)
+      this.updateStatusBar();
+
+      // Show success notification with performance info
+      const compressionInfo = headers['Content-Encoding'] === 'gzip' ? ' (compressed)' : '';
+      vscode.window.setStatusBarMessage(
+        `✓ Synced ${batch.length} activities in ${responseTime}ms${compressionInfo}`,
+        3000
+      );
 
     } catch (err) {
+      this.onFailure();
+      this.adaptBatchSize(this.lastResponseTime || 5000, false);
 
-      // Re-queue events on failure
-      this.buffer.unshift(...batch);
+      // Persist to storage instead of re-queuing to prevent memory issues
+      await this.persistToStorage(batch);
 
       // Log detailed error for debugging (not shown to user)
-      console.error('Failed to sync activities:', err);
+      console.error('[EventBuffer] Failed to sync activities:', err);
 
       // Show safe error notification without exposing internal details
-      vscode.window.showErrorMessage('Failed to sync activities. Please check your connection and API token.');
+      if (this.circuitState !== 'OPEN') {
+        vscode.window.showWarningMessage(
+          `Failed to sync activities (${this.buffer.length} queued). Saved locally and will retry.`
+        );
+      }
+
+      // Update status bar to show queued count
+      this.updateStatusBar();
+    }
+  }
+
+  /**
+   * Adapt batch size based on network performance
+   */
+  private adaptBatchSize(responseTime: number, success: boolean) {
+    // Update moving average of response time
+    this.avgResponseTime = (this.avgResponseTime * 0.7) + (responseTime * 0.3);
+
+    if (success) {
+      this.consecutiveSuccesses++;
+      this.consecutiveFailures = 0;
+
+      // If response is fast and we've had multiple successes, increase batch size
+      if (this.avgResponseTime < this.OPTIMAL_RESPONSE_TIME &&
+          this.consecutiveSuccesses >= 3 &&
+          this.batchSize < this.MAX_BATCH_SIZE) {
+        this.batchSize = Math.min(this.batchSize + 10, this.MAX_BATCH_SIZE);
+        console.log(`[EventBuffer] Increased batch size to ${this.batchSize} (avg response: ${this.avgResponseTime.toFixed(0)}ms)`);
+        this.consecutiveSuccesses = 0;
+      }
+    } else {
+      this.consecutiveFailures++;
+      this.consecutiveSuccesses = 0;
+
+      // If we're having failures or slow responses, decrease batch size
+      if (this.consecutiveFailures >= 2 && this.batchSize > this.MIN_BATCH_SIZE) {
+        this.batchSize = Math.max(this.batchSize - 10, this.MIN_BATCH_SIZE);
+        console.log(`[EventBuffer] Decreased batch size to ${this.batchSize} due to failures`);
+        this.consecutiveFailures = 0;
+      } else if (this.avgResponseTime > this.OPTIMAL_RESPONSE_TIME * 2 &&
+                 this.batchSize > this.MIN_BATCH_SIZE) {
+        this.batchSize = Math.max(this.batchSize - 5, this.MIN_BATCH_SIZE);
+        console.log(`[EventBuffer] Decreased batch size to ${this.batchSize} (slow response: ${this.avgResponseTime.toFixed(0)}ms)`);
+      }
     }
   }
 

@@ -8,6 +8,7 @@ interface StatusBarItems {
     todaySummary: vscode.StatusBarItem;
     codeMetrics: vscode.StatusBarItem;
     pomodoro: vscode.StatusBarItem;
+    syncQueue: vscode.StatusBarItem;
 }
 
 export class StatusBarManager {
@@ -51,7 +52,8 @@ export class StatusBarManager {
                 sessionTimer: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 4),
                 todaySummary: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 3),
                 codeMetrics: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 2),
-                pomodoro: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1)
+                pomodoro: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 1),
+                syncQueue: vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 6)
             };
 
             // Initialize status bar items
@@ -178,6 +180,11 @@ export class StatusBarManager {
             this.statusBarItems.pomodoro.command = 'devtimetracker.togglePomodoro';
             this.statusBarItems.pomodoro.show();
 
+            // Sync queue status - initially hidden
+            this.statusBarItems.syncQueue.text = '$(sync) Synced';
+            this.statusBarItems.syncQueue.tooltip = 'All activities synced';
+            this.statusBarItems.syncQueue.hide(); // Hidden by default
+
         } catch (error) {
 
         }
@@ -239,7 +246,7 @@ export class StatusBarManager {
             try {
                 const now = new Date();
 
-                // Check FileSessionTracker for instant idle detection (3 seconds)
+                // Check FileSessionTracker for instant idle detection (10 seconds)
                 // This gives us more accurate idle status than the old method
                 const hasRecentActivity = this.fileSessionTracker?.hasRecentActivity() ?? false;
 
@@ -547,6 +554,36 @@ export class StatusBarManager {
         // For now, just return the session time
         // In a real implementation, this would load from persistent storage
         return this.getSessionTime();
+    }
+
+    /**
+     * Update sync queue status bar with pending activities count
+     * @param pendingCount Number of activities waiting to be synced
+     * @param isOffline Whether the extension is offline/circuit breaker is open
+     */
+    public updateSyncQueueStatus(pendingCount: number, isOffline: boolean = false): void {
+        try {
+            if (pendingCount === 0 && !isOffline) {
+                // All synced - hide the status bar item
+                this.statusBarItems.syncQueue.hide();
+            } else if (isOffline) {
+                // Offline mode - show warning
+                this.statusBarItems.syncQueue.text = `$(warning) Offline (${pendingCount} queued)`;
+                this.statusBarItems.syncQueue.tooltip = `Connection issues. ${pendingCount} activities will sync when online.`;
+                this.statusBarItems.syncQueue.backgroundColor = new vscode.ThemeColor('statusBarItem.warningBackground');
+                this.statusBarItems.syncQueue.color = new vscode.ThemeColor('statusBarItem.warningForeground');
+                this.statusBarItems.syncQueue.show();
+            } else {
+                // Activities pending - show count
+                this.statusBarItems.syncQueue.text = `$(cloud-upload) ${pendingCount} queued`;
+                this.statusBarItems.syncQueue.tooltip = `${pendingCount} activities waiting to sync`;
+                this.statusBarItems.syncQueue.backgroundColor = undefined;
+                this.statusBarItems.syncQueue.color = undefined;
+                this.statusBarItems.syncQueue.show();
+            }
+        } catch (error) {
+            console.error('[StatusBar] Failed to update sync queue status:', error);
+        }
     }
 
     public dispose(): void {

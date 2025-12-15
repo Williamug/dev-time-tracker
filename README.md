@@ -51,7 +51,6 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 ## Key Features
 
 ### Intelligent Time Tracking
-- **13 Activity Events**: Tracks typing, saving, opening files, switching editors, and more
 - **Smart Idle Detection**: Automatically pauses when you're away
 - **Real-time Status Bar**: See your active coding time at a glance
 - **Project-Based Tracking**: Automatically detects and tracks time per project
@@ -121,7 +120,6 @@ Access your analytics at `http://devtimetracker.app/dashboard`:
 - Team stand-up notifications
 
 **Easy Management:**
-- Add via Command Palette or settings
 - Visual reminder manager
 - Enable/disable individual reminders
 - Adjust intervals per reminder
@@ -135,37 +133,37 @@ Dev Time Tracker for Teams provides managers and team leads with the visibility 
 
 ### Why Teams Choose Dev Time Tracker
 
-#### 📊 Team Productivity Analytics
+#### Team Productivity Analytics
 - **Team Dashboard**: Aggregated view of coding patterns across your entire team
 - **Project Time Allocation**: See how teams distribute time across projects
 - **Peak Hours Analysis**: Optimize meeting times based on team activity
 - **Resource Planning**: Identify overworked developers or underutilized resources
 
-#### 🌍 Remote Team Management
+#### Remote Team Management
 - **Distributed Team Insights**: Understand when global team members are most active
 - **Timezone Coverage**: Better coordination across time zones
 - **Work-Life Balance**: Monitor overtime and prevent burnout
 - **Fair Workload Distribution**: Ensure balanced task allocation
 
-#### 💰 Project Cost & Billing
+#### Project Cost & Billing
 - **Accurate Time Tracking**: Billable hours for agencies and consultancies
 - **Project Profitability**: Track actual time vs budget
 - **Client Reporting**: Transparent, automated reports for clients
 - **Resource Cost Analysis**: Calculate true developer cost per project
 
-#### 📈 Code Quality Metrics
+#### Code Quality Metrics
 - **Commit Patterns**: Track team commit frequency and collaboration
 - **Technical Debt**: Identify projects consuming disproportionate time
 - **Onboarding Efficiency**: Measure new developer productivity ramp-up
 - **Tech Stack Analysis**: Understand which technologies teams use most
 
-#### 🔒 Compliance & Privacy
+#### Compliance & Privacy
 - **Activity Audit Trail**: Detailed logging for compliance requirements
 - **Privacy Controls**: Granular permissions and data access controls
 - **Automated Timesheets**: For HR and payroll integration
 - **GDPR Compliant**: Full data protection and privacy controls
 
-#### 💪 Developer Well-being
+#### Developer Well-being
 - **Team Health Monitoring**: Ensure entire team maintains healthy work habits
 - **Burnout Prevention**: Alert managers about excessive hours
 - **Break Compliance**: Team-wide health reminder enforcement
@@ -173,16 +171,16 @@ Dev Time Tracker for Teams provides managers and team leads with the visibility 
 
 ### Team Features
 
-- ✅ **Team Dashboard** - Real-time analytics for entire team
-- ✅ **Manager Access Controls** - Privacy-focused permissions
-- ✅ **Centralized Billing** - One invoice for the entire team
-- ✅ **User Management** - Easy add/remove team members
-- ✅ **Team Reports** - Automated weekly/monthly reports
-- ✅ **Project Grouping** - Organize by project or department
-- ✅ **Leaderboards** (optional) - Gamification for team engagement
-- ✅ **API Access** - Custom integrations and workflows
-- ✅ **SSO/SAML** - Enterprise authentication (Business plan)
-- ✅ **Slack/Teams Integration** - Activity notifications
+- **Team Dashboard** - Real-time analytics for entire team
+- **Manager Access Controls** - Privacy-focused permissions
+- **Centralized Billing** - One invoice for the entire team
+- **User Management** - Easy add/remove team members
+- **Team Reports** - Automated weekly/monthly reports
+- **Project Grouping** - Organize by project or department
+- **Leaderboards** (optional) - Gamification for team engagement
+- **API Access** - Custom integrations and workflows
+- **SSO/SAML** - Enterprise authentication (Business plan)
+- **Slack/Teams Integration** - Activity notifications
 
 [Contact Sales →](mailto:sales@devtimetracker.app) | [Schedule Demo →](https://devtimetracker.app/demo)
 
@@ -218,7 +216,7 @@ The extension connects to our cloud service for data storage and analytics.
 
 1. **Create Your Account**
 
-   Visit [https://devtimetracker.com/register](https://devtimetracker.app/register)
+   Visit [https://devtimetracker.app/register](https://devtimetracker.app/register)
 
 2. **Choose Your Plan**:
 
@@ -249,7 +247,7 @@ The extension connects to our cloud service for data storage and analytics.
 
 3. **Get Your API Token**
 
-   After registration, copy your API token from the settings
+   After registration, go to setting and create your API token and copy to your editor.
 
 #### Configure Extension:
 
@@ -269,7 +267,7 @@ Open VS Code Settings (JSON) and add:
 If you're on the free tier, you'll see friendly notifications when approaching limits:
 
 - **Monthly Activity Limit**: 300 activities per month
-  - Activities are tracked events (typing, saving, opening files, etc.)
+  - Activities are tracked events (typing, mouse clicks, scrolling, etc.)
   - Resets monthly at midnight (your timezone)
   - Perfect for trying out the extension
 
@@ -327,11 +325,6 @@ You can add custom reminders in the settings.json file.
 - 60 minutes = 3600 seconds
 
 
-**Click the status bar** for quick actions:
-- Start/Stop tracking
-- View stats
-
-
 ### Web Dashboard Features
 
 Access at `https://devtimetracker.app/dashboard`:
@@ -353,11 +346,11 @@ Access at `https://devtimetracker.app/dashboard`:
    - Lines added/removed
    - **Click any activity to view code diff**
 
-4. **Session Management**
+<!-- 4. **Session Management**
    - View all coding sessions
    - Session duration and timestamps
    - Project associations
-   - Activity counts per session
+   - Activity counts per session -->
 
 5. **Timezone Support**
    - All times displayed in your local timezone
@@ -475,17 +468,6 @@ This extension is available under a **proprietary license** with multiple tiers:
 - Email: [asabawilliam@gmail.com](mailto:asabawilliam@gmail.com)
 - GitHub: [@williamug](https://github.com/williamug)
 - LinkedIn: [william-asaba](https://www.linkedin.com/in/asaba-william-006aa1106/)
-
-
-## Acknowledgments
-
-Built with:
-- [VS Code Extension API](https://code.visualstudio.com/api)
-- [Laravel Framework](https://laravel.com/)
-- [Tailwind CSS](https://tailwindcss.com/)
-- [Livewire](https://livewire.laravel.com/)
-
-Special thanks to all contributors and users who provide feedback and support!
 
 ---
 
