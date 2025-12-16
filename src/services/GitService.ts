@@ -67,10 +67,10 @@ export class GitService {
     // Watch for repository changes
     this.disposables.push(
       vscode.workspace.onDidSaveTextDocument(() => {
-        this.checkForNewCommits().catch(console.error);
+        this.checkForNewCommits().catch(() => {});
       }),
       vscode.workspace.onDidChangeWorkspaceFolders(() => {
-        this.checkForNewCommits().catch(console.error);
+        this.checkForNewCommits().catch(() => {});
       })
     );
   }
@@ -78,7 +78,7 @@ export class GitService {
   private startPolling(interval = 30000) {
     // Check for new commits periodically
     setInterval(() => {
-      this.checkForNewCommits().catch(console.error);
+      this.checkForNewCommits().catch(() => {});
     }, interval);
   }
 
