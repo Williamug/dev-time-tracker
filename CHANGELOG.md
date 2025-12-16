@@ -2,6 +2,62 @@
 
 All notable changes to the "dev-time-tracker" extension will be documented in this file.
 
+## [2.1.1] - 2025-12-16
+
+### Fixed
+- **Timezone Display Issues**: Fixed 3-hour time discrepancy across all pages
+  - Dashboard peak hour now shows correct local time (was showing UTC)
+  - Activities page timestamps converted to user's timezone
+  - Projects last activity time displays in local timezone
+  - Recent activities widget shows accurate relative times ("3 hours ago")
+  - All date/time displays now respect user's configured timezone
+
+- **Idle Time Tracking**: Fixed status bar timer continuing during idle periods
+  - Timer now properly pauses after 10 seconds of inactivity
+  - Total idle time accumulated and displayed in tooltip
+  - Active coding time calculation excludes all idle periods
+  - Status bar shows separate "Idle: Xm" in tooltip for transparency
+
+- **Settings Validation**: Fixed persistent "Value must be a number" errors
+  - Added validation for all actual VS Code setting names
+  - Fixed key name mismatches (e.g., `shortBreakDuration` vs `breakDuration`)
+  - Automatic cleanup of invalid settings on startup
+  - Added all missing settings to validation (snooze durations, sync interval, etc.)
+
+- **Backend Settings Sync Loop**: Prevented unnecessary API calls
+  - Added flag to detect when settings are being pulled from backend
+  - Configuration watcher now skips push when changes originate from backend
+  - Eliminates wasteful sync loop when backend updates settings
+
+### Improved
+- **Status Bar Timer Accuracy**: Enhanced daily time tracking
+  - Properly accumulates idle time throughout the day
+  - Displays both active time and total idle time
+  - Timer tooltip shows session start time and pause state
+  - Automatic daily reset at midnight
+  - Persists across VS Code reloads
+
+- **Performance Optimization**: Removed all console.log statements
+  - Cleaner console output (no debug noise)
+  - Reduced bundle size by ~3KB
+  - Silent error handlers for async operations
+  - Maintained user-facing notifications
+
+- **Backend Timezone Handling**: Comprehensive timezone conversion
+  - Activities component converts all timestamps to user timezone
+  - Projects component converts creation and activity times
+  - Dashboard recent activities use user's local time
+  - SQL queries use CONVERT_TZ() for accurate hour calculations
+  - Consistent timezone handling across all Livewire components
+
+### Technical Details
+- Updated `FileSessionTracker` idle detection integration with status bar
+- Fixed `await` usage in non-async `setInterval` callbacks
+- Enhanced `cleanInvalidSettings()` with complete setting list (40+ settings)
+- Added `isPullingFromBackend` flag to prevent configuration loops
+- Implemented timezone conversion in Activities, Projects, and Dashboard components
+- Updated MySQL queries to use CONVERT_TZ() for timezone-aware aggregations
+
 ## [2.1.0] - 2025-12-13
 
 ### Added
