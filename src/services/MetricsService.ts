@@ -119,8 +119,6 @@ export class MetricsService implements IMetricsProvider {
       // Set the reset time to the oldest timestamp + window duration
       const oldestTimestamp = Math.min(...this.requestTimestamps);
       this.rateLimitResetTime = oldestTimestamp + MetricsService.RATE_LIMIT_WINDOW_MS;
-
-      console.log(`[Metrics] Rate limited. Resets at ${new Date(this.rateLimitResetTime).toISOString()}`);
     } else {
       // Add current timestamp to the request history
       this.requestTimestamps.push(now);
@@ -547,7 +545,6 @@ export class MetricsService implements IMetricsProvider {
       );
 
       if (Date.now() - (this.lastSyncError?.timestamp || 0) < backoffTime) {
-        console.log(`[Metrics] Sync delayed - waiting for backoff period (${backoffTime}ms)`);
         return;
       }
     }
@@ -744,7 +741,7 @@ export class MetricsService implements IMetricsProvider {
     this.disposables = [];
 
     // Do one final sync before disposing
-    this.syncWithBackend().catch(console.error);
+    this.syncWithBackend().catch(() => {});
 
     this.clearTimers();
   }

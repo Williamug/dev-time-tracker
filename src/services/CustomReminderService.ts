@@ -2,13 +2,6 @@ import * as vscode from 'vscode';
 import { CustomReminder, ICustomReminder, NotificationType, ICustomReminderAction, ICustomReminderConditions } from '../models/CustomReminder';
 import { IMetricsProvider, DefaultMetricsProvider } from '../models/IMetricsProvider';
 
-const STORAGE_KEY = 'devtimetracker.customReminders';
-
-interface ReminderCheckResult {
-  shouldTrigger: boolean;
-  reason?: string;
-}
-
 export class CustomReminderService {
   private static instance: CustomReminderService | null = null;
   private reminders: Map<string, CustomReminder> = new Map();
@@ -16,8 +9,6 @@ export class CustomReminderService {
   private static readonly CHECK_INTERVAL = 30 * 1000; // 30 seconds
   private context: vscode.ExtensionContext;
   private isInitialized = false;
-  private pendingSave: NodeJS.Timeout | null = null;
-  private static readonly SAVE_DEBOUNCE = 1000; // 1 second debounce for saves
 
   /**
    * Gets the current typing statistics from the metrics provider
@@ -45,7 +36,7 @@ export class CustomReminderService {
     private metricsProvider: IMetricsProvider = new DefaultMetricsProvider()
   ) {
     this.context = context;
-    this.loadReminders();
+    this.initialize();
   }
 
   public static getInstance(context?: vscode.ExtensionContext, metricsProvider?: IMetricsProvider): CustomReminderService {
@@ -62,54 +53,39 @@ export class CustomReminderService {
     if (this.isInitialized) return;
 
     try {
-      await this.loadReminders();
+      this.loadRemindersFromConfig();
       this.setupEventListeners();
       this.startChecking();
       this.isInitialized = true;
-
     } catch (error) {
-
       throw error;
     }
   }
 
-  private async loadReminders(): Promise<void> {
+  private loadRemindersFromConfig(): void {
     try {
-      const savedReminders = this.context.globalState.get<ICustomReminder[]>(STORAGE_KEY, []);
+      const config = vscode.workspace.getConfiguration('devtimetracker');
+      const remindersConfig = config.get<ICustomReminder[]>('customReminders', []);
+
       this.reminders = new Map(
-        savedReminders.map(reminder => [reminder.id, CustomReminder.fromJSON(reminder)])
+        remindersConfig.map(reminder => [reminder.id, CustomReminder.fromJSON(reminder)])
       );
 
     } catch (error) {
-
-      this.reminders = new Map(); // Reset to empty map on error
+      this.reminders = new Map();
     }
-  }
-
-  private async saveReminders(): Promise<void> {
-    // Debounce save operations to prevent rapid successive saves
-    if (this.pendingSave) {
-      clearTimeout(this.pendingSave);
-    }
-
-    return new Promise<void>((resolve, reject) => {
-      this.pendingSave = setTimeout(async () => {
-        try {
-          const reminders = Array.from(this.reminders.values()).map(r => r.toJSON());
-          await this.context.globalState.update(STORAGE_KEY, reminders);
-
-          resolve();
-        } catch (error) {
-
-          reject(error);
-        } finally {
-          this.pendingSave = null;
-        }
-      }, CustomReminderService.SAVE_DEBOUNCE);
-    });
   }
 
   private setupEventListeners(): void {
+    // Listen for configuration changes to reload reminders
+    this.context.subscriptions.push(
+      vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('devtimetracker.customReminders')) {
+          this.loadRemindersFromConfig();
+        }
+      })
+    );
+
     // Listen for document changes to track typing activity
     this.context.subscriptions.push(
       vscode.workspace.onDidChangeTextDocument(event => {
@@ -118,17 +94,6 @@ export class CustomReminderService {
         }
       })
     );
-
-    // Save reminders when the extension is deactivated
-    this.context.subscriptions.push({
-      dispose: async () => {
-        try {
-          await this.saveReminders();
-        } catch (error) {
-
-        }
-      }
-    });
 
     // Update active document language when editor changes
     this.context.subscriptions.push(
@@ -143,11 +108,11 @@ export class CustomReminderService {
       clearInterval(this.checkInterval);
     }
 
+
     this.checkInterval = setInterval(async () => {
       try {
         await this.checkReminders();
       } catch (error) {
-
       }
     }, CustomReminderService.CHECK_INTERVAL);
   }
@@ -162,6 +127,7 @@ export class CustomReminderService {
     const sessionDuration = this.metricsProvider.getCurrentSessionDuration();
     const language = this.metricsProvider.getActiveDocumentLanguage();
 
+
     for (const [id, reminder] of this.reminders.entries()) {
       if (reminder.shouldTrigger(typingStats, language, sessionDuration)) {
         await this.showReminder(reminder, 'Reminder triggered');
@@ -172,11 +138,19 @@ export class CustomReminderService {
   private async showReminder(reminder: CustomReminder, reason: string): Promise<void> {
     // Show simple toast notification without modal
     vscode.window.showInformationMessage(`${reminder.title}: ${reminder.message}`);
-    console.log(`[CustomReminder] ${reminder.title}: ${reminder.message} (${reason})`);
 
-    // Update last triggered time
+    // Update last triggered time in the config
+    const config = vscode.workspace.getConfiguration('devtimetracker');
+    const reminders = config.get<ICustomReminder[]>('customReminders', []);
+    const reminderIndex = reminders.findIndex(r => r.id === reminder.id);
+
+    if (reminderIndex !== -1) {
+      reminders[reminderIndex].lastTriggered = Date.now();
+      await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
+    }
+
+    // Update in memory
     reminder.lastTriggered = Date.now();
-    await this.saveReminders();
   }
 
   private getNotificationType(type: NotificationType): 'info' | 'warning' | 'error' {
@@ -191,19 +165,15 @@ export class CustomReminderService {
     if (action.action.toLowerCase() === 'snooze') {
       // Default snooze for 30 minutes
       reminder.lastTriggered = Date.now() + (30 * 60 * 1000);
-
     }
     // Add more action types as needed
-
-    // Save the updated reminder
-    this.saveReminders();
   }
 
-  // Public API
+  // Public API - Note: These methods work with in-memory state
+  // The UI should update the VS Code configuration directly
   public async addReminder(reminder: Partial<ICustomReminder>): Promise<CustomReminder> {
     const newReminder = new CustomReminder(reminder);
     this.reminders.set(newReminder.id, newReminder);
-    await this.saveReminders();
     return newReminder;
   }
 
@@ -220,16 +190,11 @@ export class CustomReminderService {
     if (!reminder) return false;
 
     Object.assign(reminder, updates);
-    await this.saveReminders();
     return true;
   }
 
   public async deleteReminder(id: string): Promise<boolean> {
-    const deleted = this.reminders.delete(id);
-    if (deleted) {
-      await this.saveReminders();
-    }
-    return deleted;
+    return this.reminders.delete(id);
   }
 
   public updateTypingStats(stats: { speed: number; accuracy: number }) {

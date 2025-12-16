@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "author": "William Asaba",
   "repository": {
     "type": "git",
@@ -21,9 +21,7 @@
     "theme": "dark"
   },
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:devtimetracker.manageCustomReminders",
-    "onCommand:devtimetracker.addCustomReminder"
+    "onStartupFinished"
   ],
   "main": "./dist/extension.js",
   "contributes": {
@@ -87,6 +85,16 @@
         "command": "devtimetracker.addCustomReminder",
         "title": "Add New Reminder",
         "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.syncSettings",
+        "title": "Sync Settings with Backend",
+        "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.resetInvalidSettings",
+        "title": "Reset Invalid Settings to Defaults",
+        "category": "Dev Time Tracker"
       }
     ],
     "configuration": {
@@ -94,12 +102,14 @@
       "properties": {
         "devtimetracker.apiUrl": {
           "type": "string",
-          "default": "https://your-backend.com",
+          "default": "https://devtimetrackerapp.com",
+          "order": 1,
           "description": "Base URL of your tracking API"
         },
         "devtimetracker.apiToken": {
           "type": "string",
           "default": "",
+          "order": 2,
           "description": "Your API token"
         },
         "devtimetracker.pomodoro.workDuration": {
@@ -107,7 +117,7 @@
           "default": 25,
           "minimum": 1,
           "maximum": 120,
-          "order": 1,
+          "order": 3,
           "markdownDescription": "Duration of work sessions in **minutes**.\n\n- `25` minutes (default, classic Pomodoro)\n- `30` minutes\n- `45` minutes"
         },
         "devtimetracker.pomodoro.shortBreakDuration": {
@@ -115,7 +125,7 @@
           "default": 5,
           "minimum": 1,
           "maximum": 30,
-          "order": 2,
+          "order": 4,
           "markdownDescription": "Duration of short breaks in **minutes**.\n\n- `5` minutes (default)\n- `10` minutes\n- `15` minutes"
         },
         "devtimetracker.pomodoro.longBreakDuration": {
@@ -123,7 +133,7 @@
           "default": 15,
           "minimum": 1,
           "maximum": 60,
-          "order": 3,
+          "order": 5,
           "markdownDescription": "Duration of long breaks in **minutes**.\n\n- `15` minutes (default)\n- `20` minutes\n- `30` minutes"
         },
         "devtimetracker.pomodoro.sessionsBeforeLongBreak": {
@@ -131,54 +141,58 @@
           "default": 4,
           "minimum": 1,
           "maximum": 10,
-          "order": 4,
+          "order": 6,
           "markdownDescription": "Number of work sessions before taking a long break.\n\n- `4` sessions (default, classic Pomodoro)\n- `6` sessions\n- `8` sessions"
         },
         "devtimetracker.pomodoro.autoStartNextSession": {
           "type": "boolean",
           "default": true,
-          "order": 5,
+          "order": 7,
           "markdownDescription": "Automatically start the next session/break when the current one ends.\n\n**Enabled**: Next session starts automatically\n**Disabled**: You must manually start each session"
         },
         "devtimetracker.metrics.enabled": {
           "type": "boolean",
           "default": true,
+          "order": 8,
           "description": "Enable collection of code metrics and analytics"
         },
         "devtimetracker.metrics.syncInterval": {
           "type": "number",
           "default": 300,
           "minimum": 60,
+          "order": 9,
           "description": "Interval in seconds to sync metrics with the backend"
         },
         "devtimetracker.tracking.enableDiffCapture": {
           "type": "boolean",
-          "default": true,
+          "default": false,
+          "order": 10,
           "markdownDescription": "Enable capturing code diffs for each activity. **Shows what code was added/removed in the dashboard.**\n\n**Enabled**: Full diff tracking with side-by-side view\n**Disabled**: Only tracks line counts (less memory usage)"
         },
         "devtimetracker.tracking.enableTerminalTracking": {
           "type": "boolean",
-          "default": true,
+          "default": false,
+          "order": 11,
           "markdownDescription": "Track time spent in VS Code integrated terminals. **Note**: Only tracks terminal focus time, not actual commands (for security).\n\n**Enabled**: Terminal activity is tracked and included in your metrics\n**Disabled**: Only editor activity is tracked"
         },
         "devtimetracker.health.breakReminderEnabled": {
           "type": "boolean",
           "default": true,
-          "order": 1,
+          "order": 12,
           "markdownDescription": "Enable break reminders. **Reminders appear as non-blocking notifications and won't disrupt your workflow.**"
         },
         "devtimetracker.health.breakReminderInterval": {
           "type": "number",
           "default": 3600,
           "minimum": 300,
-          "order": 2,
+          "order": 13,
           "markdownDescription": "Time in **seconds** between break reminders.\n\n- `1800` = 30 minutes\n- `3600` = 60 minutes (default)\n- `7200` = 2 hours"
         },
         "devtimetracker.health.breakSnoozeDuration": {
           "type": "number",
           "default": 900,
           "minimum": 60,
-          "order": 3,
+          "order": 14,
           "markdownDescription": "Snooze duration in **seconds**.\n\n- `600` = 10 minutes\n- `900` = 15 minutes (default)\n- `1200` = 20 minutes"
         },
         "devtimetracker.health.breakNotificationType": {
@@ -190,7 +204,7 @@
             "error"
           ],
           "default": "none",
-          "order": 4,
+          "order": 15,
           "enumDescriptions": [
             "Status bar only (non-intrusive)",
             "Show info notification",
@@ -202,27 +216,27 @@
         "devtimetracker.health.breakEnableSound": {
           "type": "boolean",
           "default": false,
-          "order": 5,
+          "order": 16,
           "description": "Play sound when break reminder appears"
         },
         "devtimetracker.health.postureReminderEnabled": {
           "type": "boolean",
           "default": true,
-          "order": 6,
+          "order": 17,
           "markdownDescription": "Enable posture check reminders. **Helps prevent back pain and improve ergonomics.**"
         },
         "devtimetracker.health.postureReminderInterval": {
           "type": "number",
           "default": 1800,
           "minimum": 300,
-          "order": 7,
+          "order": 18,
           "markdownDescription": "Time in **seconds** between posture reminders.\n\n- `1200` = 20 minutes\n- `1800` = 30 minutes (default)\n- `3600` = 60 minutes"
         },
         "devtimetracker.health.postureSnoozeDuration": {
           "type": "number",
           "default": 900,
           "minimum": 60,
-          "order": 8,
+          "order": 19,
           "markdownDescription": "Snooze duration in **seconds**.\n\n- `600` = 10 minutes\n- `900` = 15 minutes (default)\n- `1200` = 20 minutes"
         },
         "devtimetracker.health.postureNotificationType": {
@@ -234,7 +248,7 @@
             "error"
           ],
           "default": "none",
-          "order": 9,
+          "order": 20,
           "enumDescriptions": [
             "Status bar only (non-intrusive)",
             "Show info notification",
@@ -246,27 +260,27 @@
         "devtimetracker.health.postureEnableSound": {
           "type": "boolean",
           "default": false,
-          "order": 10,
+          "order": 21,
           "description": "Play sound when posture reminder appears"
         },
         "devtimetracker.health.eyeStrainReminderEnabled": {
           "type": "boolean",
           "default": true,
-          "order": 11,
+          "order": 22,
           "markdownDescription": "Enable eye strain reminders. **Follows the 20-20-20 rule: every 20 minutes, look at something 20 feet away for 20 seconds.**"
         },
         "devtimetracker.health.eyeStrainReminderInterval": {
           "type": "number",
           "default": 1200,
           "minimum": 300,
-          "order": 12,
+          "order": 23,
           "markdownDescription": "Time in **seconds** between eye strain reminders.\n\n- `1200` = 20 minutes (default, follows 20-20-20 rule)\n- `1800` = 30 minutes\n- `3600` = 60 minutes"
         },
         "devtimetracker.health.eyeStrainSnoozeDuration": {
           "type": "number",
           "default": 600,
           "minimum": 60,
-          "order": 13,
+          "order": 24,
           "markdownDescription": "Snooze duration in **seconds**.\n\n- `300` = 5 minutes\n- `600` = 10 minutes (default)\n- `900` = 15 minutes"
         },
         "devtimetracker.health.eyeStrainNotificationType": {
@@ -278,7 +292,7 @@
             "error"
           ],
           "default": "none",
-          "order": 14,
+          "order": 25,
           "enumDescriptions": [
             "Status bar only (non-intrusive)",
             "Show info notification",
@@ -290,18 +304,20 @@
         "devtimetracker.health.eyeStrainEnableSound": {
           "type": "boolean",
           "default": false,
-          "order": 15,
+          "order": 26,
           "description": "Play sound when eye strain reminder appears"
         },
         "devtimetracker.goals.dailyCodingTarget": {
           "type": "number",
           "default": 1200,
           "minimum": 15,
+          "order": 27,
           "description": "Daily coding target in minutes"
         },
         "devtimetracker.customReminders": {
           "type": "array",
           "default": [],
+          "order": 28,
           "description": "Custom reminders with conditions",
           "items": {
             "type": "object",

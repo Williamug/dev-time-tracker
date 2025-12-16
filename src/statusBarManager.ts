@@ -22,6 +22,7 @@ export class StatusBarManager {
     private pomodoroSessionsCompleted = 0;
     private lastActiveTime: Date | null = null;
     private idleTime = 0; // Total idle time in milliseconds
+    private totalIdleTime = 0; // Total idle time for the day (cumulative)
     private updateInterval: NodeJS.Timeout | null = null;
     private fileSessionTracker: FileSessionTracker | null = null;
     private pomodoroConfig = {
@@ -41,6 +42,9 @@ export class StatusBarManager {
         // Initialize last reset date
         this.lastResetDate = new Date();
         this.lastResetDate.setHours(0, 0, 0, 0);
+
+        // Load persisted session data
+        this.loadPersistedSession();
 
         try {
             this.loadPomodoroConfig();
@@ -91,6 +95,49 @@ export class StatusBarManager {
         } catch (error) {
 
             throw error;
+        }
+    }
+
+    /**
+     * Load persisted session data from storage
+     */
+    private async loadPersistedSession(): Promise<void> {
+        try {
+            const savedDate = this.context.globalState.get<string>('sessionDate');
+            const today = new Date().toDateString();
+
+            // Only load if it's from today
+            if (savedDate === today) {
+                const savedStartTime = this.context.globalState.get<string>('sessionStartTime');
+                const savedIdleTime = this.context.globalState.get<number>('totalIdleTime', 0);
+
+                if (savedStartTime) {
+                    this.sessionStartTime = new Date(savedStartTime);
+                    this.totalIdleTime = savedIdleTime;
+                    this.idleTime = 0; // Current idle period resets
+                }
+            } else {
+                // Clear old session data
+                await this.context.globalState.update('sessionDate', undefined);
+                await this.context.globalState.update('sessionStartTime', undefined);
+                await this.context.globalState.update('totalIdleTime', undefined);
+            }
+        } catch (error) {
+            // Silently fail - will start fresh session
+        }
+    }
+
+    /**
+     * Persist session data to storage
+     */
+    private async persistSession(): Promise<void> {
+        try {
+            const today = new Date().toDateString();
+            await this.context.globalState.update('sessionDate', today);
+            await this.context.globalState.update('sessionStartTime', this.sessionStartTime?.toISOString());
+            await this.context.globalState.update('totalIdleTime', this.totalIdleTime);
+        } catch (error) {
+            // Silently fail
         }
     }
 
@@ -232,7 +279,10 @@ export class StatusBarManager {
         this.sessionStartTime = new Date();
         this.lastActiveTime = new Date();
         this.idleTime = 0;
-        console.log(`[StatusBar] New session started at ${this.sessionStartTime.toISOString()}`);
+        // Don't reset totalIdleTime - it persists for the day
+
+        // Persist the new session
+        this.persistSession();
 
         // Clear any existing interval
         if (this.updateInterval) {
@@ -255,18 +305,23 @@ export class StatusBarManager {
                     this.updateActivityStatus(hasRecentActivity);
                 }
 
-                let activeTime = now.getTime() - this.sessionStartTime.getTime() - this.idleTime;
-
                 // If we're currently active, update the last active time
                 if (this.isActive) {
+                    // If transitioning from idle to active, add the idle period to total
+                    if (this.idleTime > 0) {
+                        this.totalIdleTime += this.idleTime;
+                        this.idleTime = 0;
+                        this.persistSession(); // Fire and forget
+                    }
                     this.lastActiveTime = now;
                 } else if (this.lastActiveTime) {
-                    // If we're idle, accumulate idle time
+                    // If we're idle, calculate current idle period (don't overwrite!)
                     this.idleTime = now.getTime() - this.lastActiveTime.getTime();
                 }
 
-                // Calculate display time (total time - idle time)
-                const diffMs = Math.max(0, now.getTime() - this.sessionStartTime.getTime() - this.idleTime);
+                // Calculate display time (total time - all idle time)
+                const totalIdleMs = this.totalIdleTime + this.idleTime;
+                const diffMs = Math.max(0, now.getTime() - this.sessionStartTime.getTime() - totalIdleMs);
                 const diffMins = Math.floor(diffMs / 60000);
                 const diffSecs = Math.floor((diffMs % 60000) / 1000);
                 const hours = Math.floor(diffMins / 60);
@@ -281,11 +336,13 @@ export class StatusBarManager {
                 }
 
                 this.statusBarItems.sessionTimer.text = `$(watch) ${timeStr}`;
-                this.statusBarItems.sessionTimer.tooltip = `Coding session: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
+                const idleMins = Math.floor(totalIdleMs / 60000);
+                const idleTooltip = idleMins > 0 ? ` | Idle: ${idleMins}m` : '';
+                this.statusBarItems.sessionTimer.tooltip = `Coding session: ${timeStr}${!this.isActive ? ' (Paused)' : ''}${idleTooltip}`;
 
                 // Update today's summary
                 this.statusBarItems.todaySummary.text = `$(calendar) Today: ${timeStr}`;
-                this.statusBarItems.todaySummary.tooltip = `Total coding time today: ${timeStr}${!this.isActive ? ' (Paused)' : ''}`;
+                this.statusBarItems.todaySummary.tooltip = `Total coding time today: ${timeStr}${!this.isActive ? ' (Paused)' : ''}${idleTooltip}`;
 
                 // Update code metrics
                 this.updateCodeMetrics();
@@ -320,7 +377,8 @@ export class StatusBarManager {
         this.checkForDayChange();
 
         const now = new Date();
-        const diffMs = now.getTime() - this.sessionStartTime.getTime() - this.idleTime;
+        const totalIdleMs = this.totalIdleTime + this.idleTime;
+        const diffMs = now.getTime() - this.sessionStartTime.getTime() - totalIdleMs;
         const diffMins = Math.floor(diffMs / 60000);
         const diffSecs = Math.floor((diffMs % 60000) / 1000);
         const hours = Math.floor(diffMins / 60);
@@ -361,6 +419,10 @@ export class StatusBarManager {
                     // Reset session start time to today
                     this.sessionStartTime = new Date();
                     this.idleTime = 0;
+                    this.totalIdleTime = 0;
+
+                    // Persist the reset
+                    this.persistSession(); // Fire and forget
 
                     // Update the display to reflect the reset
                     this.updateSessionTimer();
@@ -389,13 +451,25 @@ export class StatusBarManager {
         const config = vscode.workspace.getConfiguration('devtimetracker.pomodoro');
         const previousWorkDuration = this.pomodoroConfig.workDuration;
 
+        // Get config values and ensure they're numbers
+        const workDuration = config.get<number>('workDuration');
+        const shortBreakDuration = config.get<number>('shortBreakDuration');
+        const longBreakDuration = config.get<number>('longBreakDuration');
+        const sessionsBeforeLongBreak = config.get<number>('sessionsBeforeLongBreak');
+        const autoStartNext = config.get<boolean>('autoStartNextSession');
+
         this.pomodoroConfig = {
-            workDuration: config.get<number>('workDuration') || 25,
-            shortBreakDuration: config.get<number>('shortBreakDuration') || 5,
-            longBreakDuration: config.get<number>('longBreakDuration') || 15,
-            sessionsBeforeLongBreak: config.get<number>('sessionsBeforeLongBreak') || 4,
-            autoStartNext: config.get<boolean>('autoStartNextSession') !== false
+            workDuration: Number(workDuration) || 25,
+            shortBreakDuration: Number(shortBreakDuration) || 5,
+            longBreakDuration: Number(longBreakDuration) || 15,
+            sessionsBeforeLongBreak: Number(sessionsBeforeLongBreak) || 4,
+            autoStartNext: autoStartNext !== false
         };
+
+        // Initialize pomodoroTimeLeft with work duration when first loaded
+        if (this.pomodoroTimeLeft === 0) {
+            this.pomodoroTimeLeft = this.pomodoroConfig.workDuration * 60;
+        }
 
         // If config changed and Pomodoro is not running, reset the display
         if (!this.isPomodoroRunning && previousWorkDuration !== this.pomodoroConfig.workDuration) {
@@ -410,7 +484,6 @@ export class StatusBarManager {
         if (!this.isBreakTime) {
             // Starting a work session
             this.pomodoroTimeLeft = this.pomodoroConfig.workDuration * 60;
-            console.log(`[Pomodoro] Starting work session (${this.pomodoroConfig.workDuration} minutes)`);
         } else {
             // Starting a break (short or long)
             const isLongBreak = this.pomodoroSessionsCompleted > 0 &&
@@ -421,7 +494,6 @@ export class StatusBarManager {
                 : this.pomodoroConfig.shortBreakDuration;
 
             this.pomodoroTimeLeft = breakDuration * 60;
-            console.log(`[Pomodoro] Starting ${isLongBreak ? 'long' : 'short'} break (${breakDuration} minutes)`);
         }
 
         // Clear any existing interval
@@ -461,9 +533,18 @@ export class StatusBarManager {
             return;
         }
 
+        // Safety check for valid time
+        if (this.pomodoroTimeLeft < 0 || !Number.isFinite(this.pomodoroTimeLeft)) {
+            this.pomodoroTimeLeft = this.pomodoroConfig.workDuration * 60;
+        }
+
         const minutes = Math.floor(this.pomodoroTimeLeft / 60);
         const seconds = this.pomodoroTimeLeft % 60;
-        const timeStr = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+
+        // Safety check for valid numbers
+        const minutesStr = (Number.isFinite(minutes) ? minutes : 0).toString().padStart(2, '0');
+        const secondsStr = (Number.isFinite(seconds) ? seconds : 0).toString().padStart(2, '0');
+        const timeStr = `${minutesStr}:${secondsStr}`;
 
         const mode = this.isBreakTime ? 'Break' : 'Work';
         const progress = this.getPomodoroProgress();
@@ -582,7 +663,7 @@ export class StatusBarManager {
                 this.statusBarItems.syncQueue.show();
             }
         } catch (error) {
-            console.error('[StatusBar] Failed to update sync queue status:', error);
+            // Silently fail
         }
     }
 

@@ -72,11 +72,18 @@ export class HealthStatusBar {
   }
 
   public updateBreakReminder(minutesUntilNext: number): void {
-    this.updateReminder('break', minutesUntilNext, {
-      activeText: `$(clock) Break in ${minutesUntilNext}m`,
-      activeTooltip: 'Next break reminder',
-      color: 'statusBarItem.warningBackground'
-    });
+    // Safety check for valid number - convert invalid to 0
+    if (!Number.isFinite(minutesUntilNext) || minutesUntilNext < 0) {
+      minutesUntilNext = 0;
+    }
+    // Only update if we have a positive countdown, otherwise keep current state
+    if (minutesUntilNext > 0) {
+      this.updateReminder('break', minutesUntilNext, {
+        activeText: `$(clock) Break in ${minutesUntilNext}m`,
+        activeTooltip: 'Next break reminder',
+        color: 'statusBarItem.warningBackground'
+      });
+    }
   }
 
   public clearBreakReminder(): void {
@@ -94,11 +101,18 @@ export class HealthStatusBar {
   }
 
   public updatePostureReminder(minutesUntilNext: number): void {
-    this.updateReminder('posture', minutesUntilNext, {
-      activeText: `$(check) Posture in ${minutesUntilNext}m`,
-      activeTooltip: 'Next posture check',
-      color: 'statusBarItem.warningBackground'
-    });
+    // Safety check for valid number - convert invalid to 0
+    if (!Number.isFinite(minutesUntilNext) || minutesUntilNext < 0) {
+      minutesUntilNext = 0;
+    }
+    // Only update if we have a positive countdown, otherwise keep current state
+    if (minutesUntilNext > 0) {
+      this.updateReminder('posture', minutesUntilNext, {
+        activeText: `$(check) Posture in ${minutesUntilNext}m`,
+        activeTooltip: 'Next posture check',
+        color: 'statusBarItem.warningBackground'
+      });
+    }
   }
 
   public clearPostureReminder(): void {
@@ -116,11 +130,18 @@ export class HealthStatusBar {
   }
 
   public updateEyeStrainReminder(minutesUntilNext: number): void {
-    this.updateReminder('eyeStrain', minutesUntilNext, {
-      activeText: `$(eye) Eye rest in ${minutesUntilNext}m`,
-      activeTooltip: 'Next eye rest reminder',
-      color: 'statusBarItem.warningBackground'
-    });
+    // Safety check for valid number - convert invalid to 0
+    if (!Number.isFinite(minutesUntilNext) || minutesUntilNext < 0) {
+      minutesUntilNext = 0;
+    }
+    // Only update if we have a positive countdown, otherwise keep current state
+    if (minutesUntilNext > 0) {
+      this.updateReminder('eyeStrain', minutesUntilNext, {
+        activeText: `$(eye) Eye rest in ${minutesUntilNext}m`,
+        activeTooltip: 'Next eye rest reminder',
+        color: 'statusBarItem.warningBackground'
+      });
+    }
   }
 
   public clearEyeStrainReminder(): void {
