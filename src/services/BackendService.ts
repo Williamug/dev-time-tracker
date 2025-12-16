@@ -195,15 +195,9 @@ export class BackendService {
 
   public async updateExtensionSetting(key: string, value: any): Promise<ExtensionSetting | null> {
     try {
-      // Backend expects value to be an array/object, so wrap primitives
-      const wrappedValue = Array.isArray(value) || typeof value === 'object' && value !== null
-        ? value
-        : { data: value };
-
-      const response = await this.client.put(`/api/extension-settings/${key}`, { value: wrappedValue });
-      return response.data.data || null;
+      const response = await this.client.put(`/api/extension-settings/${key}`, { value });
+      return response.data || null;
     } catch (error) {
-
       throw error;
     }
   }
@@ -323,6 +317,55 @@ export class BackendService {
     } catch (error) {
 
       throw error;
+    }
+  }
+
+  // Custom Reminders Methods
+  public async getCustomReminders(): Promise<any> {
+    try {
+      const response = await this.client.get('/api/custom-reminders');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async saveCustomReminders(reminders: any[]): Promise<any> {
+    try {
+      const response = await this.client.post('/api/custom-reminders', { reminders });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async syncCustomReminders(localReminders: any[], lastSync: number): Promise<any> {
+    try {
+      const response = await this.client.post('/api/custom-reminders/sync', {
+        reminders: localReminders,
+        last_sync: lastSync
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async updateCustomReminder(id: string, updates: any): Promise<any> {
+    try {
+      const response = await this.client.put(`/api/custom-reminders/${id}`, updates);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async deleteCustomReminder(id: string): Promise<boolean> {
+    try {
+      await this.client.delete(`/api/custom-reminders/${id}`);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 }
