@@ -7,6 +7,7 @@ import { GitService } from './services/GitService';
 import { HealthService } from './services/HealthService';
 import { BackendService } from './services/BackendService';
 import { CustomReminderService } from './services/CustomReminderService';
+import { SettingsSyncService } from './services/SettingsSyncService';
 import { DiffService } from './services/DiffService';
 import { FileSessionTracker } from './services/FileSessionTracker';
 import { TerminalTracker } from './services/TerminalTracker';
@@ -18,6 +19,7 @@ let diffService: DiffService | null = null;
 let eventBuffer: EventBuffer | null = null;
 let fileSessionTracker: FileSessionTracker | null = null;
 let terminalTracker: TerminalTracker | null = null;
+let settingsSyncService: SettingsSyncService | null = null;
 
 export async function activate(ctx: vscode.ExtensionContext) {
 
@@ -107,7 +109,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
       }
     }
   } catch (error) {
-    console.error('[Extension] HealthService initialization error:', error);
   }
 
   // Initialize other services with backend (if available)
@@ -173,6 +174,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
     metricsService = MetricsService.getInstance(backendService);
     gitService = GitService.getInstance(backendService);
 
+    // Initialize settings sync service
+    settingsSyncService = SettingsSyncService.getInstance(ctx, backendService);
+    await settingsSyncService.initialize();
+
     // Initialize custom reminders with metrics integration
     if (metricsService) {
       customReminderService = CustomReminderService.getInstance(ctx, metricsService);
@@ -222,7 +227,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   if (enableDiffCapture) {
     diffService = new DiffService();
     diffService.start();
-    console.log('[Extension] DiffService initialized (enabled)');
   } else {
 
   }
@@ -238,7 +242,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
   }
 
   // Initialize terminal tracker (optional, based on settings)
-  const enableTerminalTracking = cfg.get<boolean>('tracking.enableTerminalTracking', true);
+  const enableTerminalTracking = cfg.get<boolean>('tracking.enableTerminalTracking', false);
   if (enableTerminalTracking) {
     terminalTracker = new TerminalTracker(eventBuffer, fileSessionTracker);
     terminalTracker.start();
@@ -253,6 +257,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   // Activity tracking is handled by FileSessionTracker through EventListener
   // No need for separate activity event listeners
+
+  // Register custom reminder commands early
+  registerCustomReminderCommands(ctx);
 
   // Register other commands
   const disposables: vscode.Disposable[] = [];
@@ -282,7 +289,96 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
   // Health reminder commands already registered at the top of activate()
 
-  // 2c. Toggle diff capture command
+  // 2c. Sync settings with backend command
+  disposables.push(vscode.commands.registerCommand('devtimetracker.syncSettings', async () => {
+    if (!settingsSyncService) {
+      vscode.window.showWarningMessage('Settings sync service not available (backend not configured)');
+      return;
+    }
+
+    vscode.window.showInformationMessage('Syncing settings with backend...');
+    const status = await settingsSyncService.forceSyncNow();
+
+    if (status.errors.length > 0) {
+      vscode.window.showErrorMessage(`Sync completed with errors: ${status.errors.join(', ')}`);
+    } else {
+      vscode.window.showInformationMessage(
+        `✓ Settings synced successfully!\nSettings: ${status.settingsSynced ? '✓' : '✗'} | Reminders: ${status.remindersSynced ? '✓' : '✗'}`
+      );
+    }
+  }));
+
+  // 2c2. Reset invalid settings command
+  disposables.push(vscode.commands.registerCommand('devtimetracker.resetInvalidSettings', async () => {
+    const config = vscode.workspace.getConfiguration('devtimetracker');
+
+    // List of all numeric settings with their defaults
+    const numericSettings = [
+      { key: 'pomodoro.workDuration', default: 25 },
+      { key: 'pomodoro.shortBreakDuration', default: 5 },
+      { key: 'pomodoro.longBreakDuration', default: 15 },
+      { key: 'pomodoro.sessionsBeforeLongBreak', default: 4 },
+      { key: 'health.breakReminderInterval', default: 3600 },
+      { key: 'health.postureReminderInterval', default: 1800 },
+      { key: 'health.eyeStrainReminderInterval', default: 1200 },
+      { key: 'health.breakSnoozeDuration', default: 900 },
+      { key: 'health.postureSnoozeDuration', default: 900 },
+      { key: 'health.eyeStrainSnoozeDuration', default: 600 },
+      { key: 'tracking.idleTimeout', default: 300 },
+      { key: 'metrics.syncInterval', default: 60 }
+    ];
+
+    const booleanSettings = [
+      { key: 'pomodoro.autoStartNextSession', default: false },
+      { key: 'health.breakReminderEnabled', default: true },
+      { key: 'health.postureReminderEnabled', default: true },
+      { key: 'health.eyeStrainReminderEnabled', default: true },
+      { key: 'health.enable202020Rule', default: true },
+      { key: 'health.enablePostureReminder', default: true },
+      { key: 'health.enableBreakReminder', default: true },
+      { key: 'health.breakEnableSound', default: false },
+      { key: 'health.postureEnableSound', default: false },
+      { key: 'health.eyeStrainEnableSound', default: false },
+      { key: 'tracking.enableDiffCapture', default: true },
+      { key: 'tracking.enableTerminalTracking', default: false },
+      { key: 'metrics.enabled', default: true }
+    ];
+
+    let resetCount = 0;
+
+    // Reset numeric settings if they're not valid numbers
+    for (const setting of numericSettings) {
+      const value = config.get(setting.key);
+      if (typeof value !== 'number' || isNaN(value) || !isFinite(value)) {
+        await config.update(setting.key, setting.default, vscode.ConfigurationTarget.Global);
+        resetCount++;
+      }
+    }
+
+    // Reset boolean settings if they're not valid booleans
+    for (const setting of booleanSettings) {
+      const value = config.get(setting.key);
+      if (typeof value !== 'boolean') {
+        await config.update(setting.key, setting.default, vscode.ConfigurationTarget.Global);
+        resetCount++;
+      }
+    }
+
+    if (resetCount > 0) {
+      vscode.window.showInformationMessage(
+        `✓ Reset ${resetCount} invalid setting${resetCount > 1 ? 's' : ''} to defaults. Please reload the window.`,
+        'Reload Window'
+      ).then(selection => {
+        if (selection === 'Reload Window') {
+          vscode.commands.executeCommand('workbench.action.reloadWindow');
+        }
+      });
+    } else {
+      vscode.window.showInformationMessage('All settings are valid!');
+    }
+  }));
+
+  // 2d. Toggle diff capture command
   disposables.push(vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
     const cfg = vscode.workspace.getConfiguration('devtimetracker');
     const currentValue = cfg.get<boolean>('tracking.enableDiffCapture', true);
@@ -310,33 +406,8 @@ export async function activate(ctx: vscode.ExtensionContext) {
     }
   }));
 
-  // 3. Add custom reminder command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.addCustomReminder', async () => {
-    const customReminderService = CustomReminderService.getInstance(ctx);
-    if (!customReminderService) {
-      const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-      statusBarItem.text = '$(error) Reminder service not available';
-      statusBarItem.show();
-      setTimeout(() => statusBarItem.dispose(), 5000);
-      return;
-    }
-
-    // Show status bar message instead of popup
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 0);
-    statusBarItem.text = '$(error) Reminder creation not available';
-    statusBarItem.tooltip = 'This feature requires popup dialogs which are disabled in this version.';
-    statusBarItem.show();
-
-    // Auto-hide after 5 seconds
-    setTimeout(() => statusBarItem.dispose(), 5000);
-    return;
-  }));
-
   // Register all disposables with the extension context
   disposables.forEach(disposable => ctx.subscriptions.push(disposable));
-
-  // Register custom reminder commands
-  registerCustomReminderCommands(ctx);
 
   // Log successful activation
 
@@ -353,6 +424,10 @@ export async function deactivate() {
   HealthService.getInstance().dispose();
   CustomReminderService.getInstance().dispose();
 
+  if (settingsSyncService) {
+    settingsSyncService.dispose();
+    settingsSyncService = null;
+  }
 
   if (diffService) {
     diffService.dispose();
