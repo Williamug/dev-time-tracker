@@ -50,13 +50,13 @@ export class EventBuffer {
   private context?: vscode.ExtensionContext;
 
   // Adaptive batching - network condition tracking
-  private avgResponseTime = 500; // milliseconds
+  private avgResponseTime = 500;
   private lastResponseTime = 0;
   private consecutiveSuccesses = 0;
   private consecutiveFailures = 0;
   private readonly MIN_BATCH_SIZE = 10;
   private readonly MAX_BATCH_SIZE = 100;
-  private readonly OPTIMAL_RESPONSE_TIME = 1000; // 1 second
+  private readonly OPTIMAL_RESPONSE_TIME = 1000;
 
   // Compression settings
   private enableCompression = true; // Enabled with Laravel DecompressGzipRequest middleware
@@ -105,7 +105,6 @@ export class EventBuffer {
     try {
       const pending = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
       if (pending.length > 0) {
-        console.log(`[EventBuffer] Loaded ${pending.length} pending activities from storage`);
         this.buffer.push(...pending);
         // Clear storage after loading
         await this.context.globalState.update('pending_activities', []);
@@ -113,7 +112,7 @@ export class EventBuffer {
         this.updateStatusBar();
       }
     } catch (error) {
-      console.error('[EventBuffer] Failed to load pending activities:', error);
+      // Silently fail
     }
   }
 
@@ -155,9 +154,8 @@ export class EventBuffer {
     try {
       const existing = this.context.globalState.get<CodingActivityEvent[]>('pending_activities', []);
       await this.context.globalState.update('pending_activities', [...existing, ...batch]);
-      console.log(`[EventBuffer] Persisted ${batch.length} activities to storage`);
     } catch (error) {
-      console.error('[EventBuffer] Failed to persist activities:', error);
+      // Silently fail
     }
   }
 
@@ -169,7 +167,6 @@ export class EventBuffer {
       const timeSinceFailure = Date.now() - this.lastFailureTime;
       if (timeSinceFailure > this.CIRCUIT_RESET_TIMEOUT) {
         this.circuitState = 'HALF_OPEN';
-        console.log('[EventBuffer] Circuit breaker entering HALF_OPEN state');
         return false;
       }
       return true;
@@ -183,7 +180,6 @@ export class EventBuffer {
   private onSuccess() {
     if (this.circuitState === 'HALF_OPEN') {
       this.circuitState = 'CLOSED';
-      console.log('[EventBuffer] Circuit breaker CLOSED');
       // Update status bar to show we're back online
       this.updateStatusBar();
     }
@@ -199,7 +195,6 @@ export class EventBuffer {
 
     if (this.failureCount >= this.MAX_FAILURES) {
       this.circuitState = 'OPEN';
-      console.log(`[EventBuffer] Circuit breaker OPEN after ${this.failureCount} failures`);
       // Update status bar to show offline state
       this.updateStatusBar();
       vscode.window.showWarningMessage(
@@ -310,7 +305,6 @@ export class EventBuffer {
 
     // Check circuit breaker
     if (this.isCircuitOpen()) {
-      console.log('[EventBuffer] Circuit breaker is OPEN, skipping flush');
       this.updateStatusBar(); // Show user how many are queued
       return;
     }
@@ -337,10 +331,7 @@ export class EventBuffer {
           body = compressed;
           headers['Content-Type'] = 'application/json';
           headers['Content-Encoding'] = 'gzip';
-          const compressionRatio = ((1 - compressed.length / payloadSize) * 100).toFixed(1);
-          console.log(`[EventBuffer] Compressed ${payloadSize} bytes → ${compressed.length} bytes (${compressionRatio}% reduction)`);
         } catch (compressionError) {
-          console.error('[EventBuffer] Compression failed, sending uncompressed:', compressionError);
           headers['Content-Type'] = 'application/json';
           body = payload;
         }
@@ -359,7 +350,6 @@ export class EventBuffer {
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('[EventBuffer] Flush failed with status:', response.status, errorText);
         throw new Error(`HTTP ${response.status}: ${errorText}`);
       }
 
@@ -383,9 +373,6 @@ export class EventBuffer {
 
       // Persist to storage instead of re-queuing to prevent memory issues
       await this.persistToStorage(batch);
-
-      // Log detailed error for debugging (not shown to user)
-      console.error('[EventBuffer] Failed to sync activities:', err);
 
       // Show safe error notification without exposing internal details
       if (this.circuitState !== 'OPEN') {
@@ -415,7 +402,6 @@ export class EventBuffer {
           this.consecutiveSuccesses >= 3 &&
           this.batchSize < this.MAX_BATCH_SIZE) {
         this.batchSize = Math.min(this.batchSize + 10, this.MAX_BATCH_SIZE);
-        console.log(`[EventBuffer] Increased batch size to ${this.batchSize} (avg response: ${this.avgResponseTime.toFixed(0)}ms)`);
         this.consecutiveSuccesses = 0;
       }
     } else {
@@ -425,12 +411,10 @@ export class EventBuffer {
       // If we're having failures or slow responses, decrease batch size
       if (this.consecutiveFailures >= 2 && this.batchSize > this.MIN_BATCH_SIZE) {
         this.batchSize = Math.max(this.batchSize - 10, this.MIN_BATCH_SIZE);
-        console.log(`[EventBuffer] Decreased batch size to ${this.batchSize} due to failures`);
         this.consecutiveFailures = 0;
       } else if (this.avgResponseTime > this.OPTIMAL_RESPONSE_TIME * 2 &&
                  this.batchSize > this.MIN_BATCH_SIZE) {
         this.batchSize = Math.max(this.batchSize - 5, this.MIN_BATCH_SIZE);
-        console.log(`[EventBuffer] Decreased batch size to ${this.batchSize} (slow response: ${this.avgResponseTime.toFixed(0)}ms)`);
       }
     }
   }
