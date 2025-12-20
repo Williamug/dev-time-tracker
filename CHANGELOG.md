@@ -2,6 +2,61 @@
 
 All notable changes to the "dev-time-tracker" extension will be documented in this file.
 
+## [2.1.2] - 2025-12-20
+
+### Added
+- **What's New Notification System**: Automatic update notifications with beautiful UI
+  - Shows new features and improvements after each update
+  - Automatically parses release notes from CHANGELOG.md
+  - Professional design matching VS Code themes with extension branding
+  - Interactive buttons for dashboard access, settings, and community engagement
+  - Smart version tracking prevents repeated notifications
+
+- **Enhanced User Onboarding**: Improved first-time user experience
+  - Welcome notification system for new installations
+  - Quick access to dashboard and settings configuration
+  - GitHub repository and marketplace review integration
+
+### Improved
+- **Visual Design**: Updated to cyan theme colors throughout the extension
+  - Consistent branding with cyan (#00bcd4) color scheme
+  - Enhanced hover effects and smooth animations
+  - Better contrast and accessibility in all UI components
+  - Professional appearance matching modern VS Code extensions
+
+- **Command Registration**: Fixed timing issues with extension activation
+  - Resolved "command not found" errors during startup
+  - Improved extension activation reliability
+  - Better error handling for command registration failures
+
+- **Extension Maintenance**: Automated changelog integration
+  - Single-file maintenance workflow for release notes
+  - Automatic extraction of version-specific changes
+  - Reduced duplication between changelog and notification system
+
+### Technical
+- **Backend Integration**: Enhanced API communication reliability
+- **Webview Security**: Proper resource URI handling for extension assets
+- **TypeScript**: Improved type safety and error handling
+
+### Backend Improvements
+- **API Integration**: Enhanced communication reliability with VS Code extension
+  - Better error handling for extension requests
+  - Improved response formatting for What's New system
+  - Enhanced settings synchronization stability
+
+- **Dashboard Performance**: Optimized data retrieval and rendering
+  - Faster loading times for analytics dashboard
+  - Improved timezone handling for accurate time displays
+  - Better caching mechanisms for frequently accessed data
+
+- **Backend Infrastructure**: Enhanced system reliability
+  - Improved health monitoring and system health checks
+  - Enhanced error tracking and debugging capabilities
+  - Updated API endpoint documentation
+  - Enhanced test coverage for critical features
+  - Continuous security and performance optimizations
+
 ## [2.1.1] - 2025-12-16
 
 ### Fixed
