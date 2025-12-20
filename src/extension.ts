@@ -11,6 +11,7 @@ import { SettingsSyncService } from './services/SettingsSyncService';
 import { DiffService } from './services/DiffService';
 import { FileSessionTracker } from './services/FileSessionTracker';
 import { TerminalTracker } from './services/TerminalTracker';
+import { WhatsNewService } from './services/WhatsNewService';
 import { registerCustomReminderCommands } from './commands/manageCustomReminders';
 import { ICustomReminder } from './models/CustomReminder';
 
@@ -22,6 +23,7 @@ let terminalTracker: TerminalTracker | null = null;
 let settingsSyncService: SettingsSyncService | null = null;
 
 export async function activate(ctx: vscode.ExtensionContext) {
+  console.log('Dev Time Tracker: Extension activation started');
 
   // Log available commands for debugging
   const availableCommands = await vscode.commands.getCommands(true);
@@ -38,12 +40,83 @@ export async function activate(ctx: vscode.ExtensionContext) {
   let customReminderService: CustomReminderService | null = null;
 
   // Register health reminder commands FIRST (before HealthService creates status bar items)
+  console.log('Dev Time Tracker: Registering commands');
+
+  // Add a simple test command to verify basic command registration works
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('devtimetracker.testBasicCommand', () => {
+      console.log('Dev Time Tracker: Basic test command executed');
+      vscode.window.showInformationMessage('✅ Basic command works! Extension is properly activated.');
+    })
+  );
+
+  // Initialize What's New Service (simplified)
+  const whatsNewService = new WhatsNewService(ctx);
+
+  // Register ALL commands early to test if timing is the issue
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('devtimetracker.testWhatsNew', async () => {
+      await whatsNewService.showWhatsNew();
+    }),
+    vscode.commands.registerCommand('devtimetracker.showWhatsNew', async () => {
+      await whatsNewService.showWhatsNew();
+    }),
+    vscode.commands.registerCommand('devtimetracker.openSettings', () => {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
+    }),
+    vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
+      statusBarManager?.togglePomodoro();
+    }),
+    vscode.commands.registerCommand('devtimetracker.syncSettings', async () => {
+      if (!settingsSyncService) {
+        vscode.window.showWarningMessage('Settings sync service not available (backend not configured)');
+        return;
+      }
+
+      vscode.window.showInformationMessage('Syncing settings with backend...');
+      try {
+        const status = await settingsSyncService.forceSyncNow();
+        if (status.errors.length > 0) {
+          vscode.window.showErrorMessage(`Sync completed with errors: ${status.errors.join(', ')}`);
+        } else {
+          vscode.window.showInformationMessage(`✅ Settings synced successfully!`);
+        }
+      } catch (error) {
+        vscode.window.showErrorMessage('Settings sync failed');
+      }
+    }),
+    vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
+      const cfg = vscode.workspace.getConfiguration('devtimetracker');
+      const currentValue = cfg.get<boolean>('tracking.enableDiffCapture', true);
+      const newValue = !currentValue;
+
+      await cfg.update('tracking.enableDiffCapture', newValue, vscode.ConfigurationTarget.Global);
+
+      if (newValue) {
+        if (!diffService) {
+          diffService = new DiffService();
+          diffService.start();
+          eventBuffer?.setDiffService(diffService);
+        }
+        vscode.window.showInformationMessage('Code diff tracking enabled (full diffs + line counts)');
+      } else {
+        if (diffService) {
+          diffService.dispose();
+          diffService = null;
+          eventBuffer?.setDiffService(null);
+        }
+        vscode.window.showInformationMessage('Code diff tracking disabled (line counts only)');
+      }
+    })
+  );
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('devtimetracker.start202020Timer', async () => {
+      console.log('Dev Time Tracker: start202020Timer command executed');
       await healthService?.start202020Timer();
     }),
     vscode.commands.registerCommand('devtimetracker.acknowledgePosture', () => {
+      console.log('Dev Time Tracker: acknowledgePosture command executed');
       vscode.window.showInformationMessage('✓ Posture checked! Keep sitting up straight.');
     }),
     vscode.commands.registerCommand('devtimetracker.acknowledgeEyeStrain', async () => {
@@ -264,13 +337,11 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Register other commands
   const disposables: vscode.Disposable[] = [];
 
-  // 2. Toggle Pomodoro command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-    statusBarManager?.togglePomodoro();
-  }));
+  // Toggle Pomodoro command already registered early in activation
 
   // 2b. Test notifications command (for debugging)
-  disposables.push(vscode.commands.registerCommand('devtimetracker.testNotifications', async () => {
+  ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.testNotifications', async () => {
+    console.log('Dev Time Tracker: testNotifications command executed');
     vscode.window.showInformationMessage('Testing notifications - this should appear in bottom-right corner', 'OK');
 
     // Also test backend connection
@@ -287,29 +358,34 @@ export async function activate(ctx: vscode.ExtensionContext) {
     }
   }));
 
-  // Health reminder commands already registered at the top of activate()
+  ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.openDashboard', () => {
+    console.log('Dev Time Tracker: openDashboard command executed');
+    const cfg = vscode.workspace.getConfiguration('devtimetracker');
+    const apiUrl = cfg.get<string>('apiUrl');
 
-  // 2c. Sync settings with backend command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.syncSettings', async () => {
-    if (!settingsSyncService) {
-      vscode.window.showWarningMessage('Settings sync service not available (backend not configured)');
-      return;
-    }
-
-    vscode.window.showInformationMessage('Syncing settings with backend...');
-    const status = await settingsSyncService.forceSyncNow();
-
-    if (status.errors.length > 0) {
-      vscode.window.showErrorMessage(`Sync completed with errors: ${status.errors.join(', ')}`);
+    if (apiUrl) {
+      // Remove trailing slash if present
+      const baseUrl = apiUrl.replace(/\/$/, '');
+      const dashboardUrl = `${baseUrl}/dashboard`;
+      vscode.env.openExternal(vscode.Uri.parse(dashboardUrl));
     } else {
-      vscode.window.showInformationMessage(
-        `✓ Settings synced successfully!\nSettings: ${status.settingsSynced ? '✓' : '✗'} | Reminders: ${status.remindersSynced ? '✓' : '✗'}`
-      );
+      vscode.window.showWarningMessage('Dashboard URL not configured. Please set up your API URL in settings.');
     }
   }));
 
+  ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.openSettings', () => {
+    console.log('Dev Time Tracker: openSettings command executed');
+    vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
+  }));
+
+
+  // Health reminder commands already registered at the top of activate()
+
+  // Sync settings command already registered early in activation
+
   // 2c2. Reset invalid settings command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.resetInvalidSettings', async () => {
+  ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.resetInvalidSettings', async () => {
+    console.log('Dev Time Tracker: resetInvalidSettings command executed');
     const config = vscode.workspace.getConfiguration('devtimetracker');
 
     // List of all numeric settings with their defaults
@@ -378,38 +454,14 @@ export async function activate(ctx: vscode.ExtensionContext) {
     }
   }));
 
-  // 2d. Toggle diff capture command
-  disposables.push(vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
-    const cfg = vscode.workspace.getConfiguration('devtimetracker');
-    const currentValue = cfg.get<boolean>('tracking.enableDiffCapture', true);
-    const newValue = !currentValue;
-
-    await cfg.update('tracking.enableDiffCapture', newValue, vscode.ConfigurationTarget.Global);
-
-    // Restart or stop DiffService based on new value
-    if (newValue) {
-      // Enable diff tracking
-      if (!diffService) {
-        diffService = new DiffService();
-        diffService.start();
-        eventBuffer?.setDiffService(diffService);
-      }
-      vscode.window.showInformationMessage('✓ Code diff tracking enabled');
-    } else {
-      // Disable diff tracking
-      if (diffService) {
-        diffService.dispose();
-        diffService = null;
-        eventBuffer?.setDiffService(null);
-      }
-      vscode.window.showInformationMessage('Code diff tracking disabled (line counts only)');
-    }
-  }));
+  // Toggle diff capture command already registered early in activation
 
   // Register all disposables with the extension context
   disposables.forEach(disposable => ctx.subscriptions.push(disposable));
 
   // Log successful activation
+  console.log('Dev Time Tracker: Extension activation completed successfully');
+  console.log(`Dev Time Tracker: Registered ${ctx.subscriptions.length} subscriptions`);
 
   // Return the public API if needed
   return {
