@@ -210,7 +210,12 @@ export class EventBuffer {
     vscode.window.onDidChangeActiveTextEditor((editor) => {
       if (editor) {
         this.currentFile = vscode.workspace.asRelativePath(editor.document.uri);
-        this.currentLanguage = editor.document.languageId;
+        // Normalize language when storing it
+        const normalized = this.normalizeLanguage(
+          editor.document.languageId,
+          editor.document.uri.fsPath
+        );
+        this.currentLanguage = normalized || editor.document.languageId;
       }
     });
 
@@ -266,11 +271,22 @@ export class EventBuffer {
     const editorInfo = this.getEditorInfo();
     const osInfo = this.getOperatingSystem();
 
+    // Normalize language - this will skip if it's not a real programming language
+    const normalizedLanguage = this.normalizeLanguage(
+      editor.document.languageId,
+      editor.document.uri.fsPath
+    );
+
+    // Skip tracking for non-programming files
+    if (!normalizedLanguage) {
+      return;
+    }
+
     const activity: CodingActivityEvent = {
       event_type: eventType,
       duration: Math.max(1, duration), // at least 1 second
       file_path: vscode.workspace.asRelativePath(editor.document.uri),
-      language: editor.document.languageId,
+      language: normalizedLanguage,
       project_name: this.projectName,
       editor: editorInfo,
       operating_system: osInfo,
@@ -374,8 +390,32 @@ export class EventBuffer {
       // Persist to storage instead of re-queuing to prevent memory issues
       await this.persistToStorage(batch);
 
-      // Show safe error notification without exposing internal details
-      if (this.circuitState !== 'OPEN') {
+      // Log the actual error for debugging
+      const errorMessage = err instanceof Error ? err.message : String(err);
+
+      // Check for specific error types
+      if (errorMessage.includes('HTTP 401') || errorMessage.includes('Unauthenticated')) {
+        // Token expired or invalid
+        vscode.window.showErrorMessage(
+          'Dev Time Tracker: API token expired or invalid. Please update your token in settings.',
+          'Open Settings'
+        ).then(selection => {
+          if (selection === 'Open Settings') {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker.apiToken');
+          }
+        });
+      } else if (errorMessage.includes('HTTP 403')) {
+        // Forbidden - permissions issue
+        vscode.window.showErrorMessage(
+          'Dev Time Tracker: Access denied. Check your API permissions.',
+          'Open Settings'
+        ).then(selection => {
+          if (selection === 'Open Settings') {
+            vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
+          }
+        });
+      } else if (this.circuitState !== 'OPEN') {
+        // Generic error - show safe message
         vscode.window.showWarningMessage(
           `Failed to sync activities (${this.buffer.length} queued). Saved locally and will retry.`
         );
@@ -443,7 +483,7 @@ export class EventBuffer {
       event_type: 'typing', // Backend expects 'typing' or 'click', use typing for terminal
       duration: Math.max(1, duration),
       file_path: `terminal://${extraData?.terminal_name || 'unknown'}`,
-      language: 'terminal',
+      language: 'Shell', // Normalize terminal to Shell
       project_name: this.projectName,
       editor: editorInfo,
       operating_system: osInfo,
@@ -471,7 +511,10 @@ export class EventBuffer {
    * Get editor name and version
    */
   private getEditorInfo(): string {
-    return `VS Code ${vscode.version}`;
+    // Detect the actual editor being used
+    // VS Code forks like Cursor, Windsurf, etc. have different app names
+    const appName = vscode.env.appName || 'VS Code';
+    return `${appName} ${vscode.version}`;
   }
 
   /**
@@ -492,8 +535,300 @@ export class EventBuffer {
     return osMap[platform] || platform;
   }
 
-  stop() {
+  /**
+   * Normalize language ID to actual programming language
+   * Filters out non-programming file types
+   */
+  private normalizeLanguage(languageId: string, filePath: string): string | null {
+    // Map VS Code language IDs to standard language names
+    const languageMap: { [key: string]: string } = {
+      // JavaScript/TypeScript ecosystem
+      'javascript': 'JavaScript',
+      'javascriptreact': 'JavaScript',
+      'jsx': 'JavaScript',
+      'typescript': 'TypeScript',
+      'typescriptreact': 'TypeScript',
+      'tsx': 'TypeScript',
+      'vue': 'Vue',
+      'svelte': 'Svelte',
+      'astro': 'Astro',
+      'coffeescript': 'CoffeeScript',
 
+      // Web languages
+      'html': 'HTML',
+      'css': 'CSS',
+      'scss': 'SCSS',
+      'sass': 'Sass',
+      'less': 'Less',
+      'stylus': 'Stylus',
+
+      // Backend languages
+      'php': 'PHP',
+      'python': 'Python',
+      'java': 'Java',
+      'csharp': 'C#',
+      'cpp': 'C++',
+      'c': 'C',
+      'go': 'Go',
+      'rust': 'Rust',
+      'ruby': 'Ruby',
+      'perl': 'Perl',
+      'r': 'R',
+      'swift': 'Swift',
+      'kotlin': 'Kotlin',
+      'scala': 'Scala',
+      'dart': 'Dart',
+      'lua': 'Lua',
+      'elixir': 'Elixir',
+      'erlang': 'Erlang',
+      'haskell': 'Haskell',
+      'clojure': 'Clojure',
+      'fsharp': 'F#',
+      'ocaml': 'OCaml',
+      'nim': 'Nim',
+      'zig': 'Zig',
+      'crystal': 'Crystal',
+      'julia': 'Julia',
+
+      // Shell/scripting
+      'shellscript': 'Shell',
+      'bash': 'Shell',
+      'zsh': 'Shell',
+      'fish': 'Shell',
+      'powershell': 'PowerShell',
+      'bat': 'Batch',
+      'cmd': 'Batch',
+
+      // Data/config formats
+      'json': 'JSON',
+      'jsonc': 'JSON',
+      'json5': 'JSON',
+      'yaml': 'YAML',
+      'yml': 'YAML',
+      'toml': 'TOML',
+      'xml': 'XML',
+      'ini': 'INI',
+      'properties': 'Properties',
+      'env': 'ENV',
+      'dotenv': 'ENV',
+
+      // Database & Query
+      'sql': 'SQL',
+      'plsql': 'SQL',
+      'mysql': 'SQL',
+      'postgres': 'SQL',
+      'postgresql': 'SQL',
+      'tsql': 'SQL',
+      'graphql': 'GraphQL',
+      'cypher': 'Cypher',
+
+      // Markup/documentation
+      'markdown': 'Markdown',
+      'mdx': 'MDX',
+      'latex': 'LaTeX',
+      'tex': 'LaTeX',
+      'restructuredtext': 'reStructuredText',
+      'asciidoc': 'AsciiDoc',
+
+      // Template languages
+      'blade': 'PHP', // Laravel Blade is PHP
+      'twig': 'PHP',
+      'handlebars': 'Handlebars',
+      'ejs': 'JavaScript',
+      'pug': 'Pug',
+      'jade': 'Pug',
+      'haml': 'Ruby',
+      'razor': 'C#',
+      'jsp': 'Java',
+      'erb': 'Ruby',
+      'liquid': 'Liquid',
+      'nunjucks': 'Nunjucks',
+      'jinja': 'Python',
+      'django-html': 'Python',
+
+      // Mobile development
+      'objective-c': 'Objective-C',
+      'objective-cpp': 'Objective-C++',
+      'groovy': 'Groovy',
+
+      // Flutter & React Native (framework-specific files)
+      'flutter': 'Dart',
+      'flutter-widget': 'Dart',
+
+      // Systems & Low-level
+      'assembly': 'Assembly',
+      'asm': 'Assembly',
+      'verilog': 'Verilog',
+      'vhdl': 'VHDL',
+
+      // Functional & Academic
+      'scheme': 'Scheme',
+      'racket': 'Racket',
+      'lisp': 'Lisp',
+      'commonlisp': 'Common Lisp',
+      'prolog': 'Prolog',
+
+      // Game development
+      'gdscript': 'GDScript',
+      'glsl': 'GLSL',
+      'hlsl': 'HLSL',
+      'shaderlab': 'ShaderLab',
+
+      // Blockchain & Smart Contracts
+      'solidity': 'Solidity',
+
+      // DevOps & Infrastructure
+      'dockerfile': 'Docker',
+      'makefile': 'Makefile',
+      'cmake': 'CMake',
+      'terraform': 'Terraform',
+      'bicep': 'Bicep',
+      'puppet': 'Puppet',
+      'ansible': 'Ansible',
+      'saltstack': 'SaltStack',
+
+      // Data serialization
+      'proto': 'Protocol Buffers',
+      'thrift': 'Thrift',
+
+      // Other
+      'graphviz': 'GraphViz',
+      'diff': 'Diff',
+      'processing': 'Processing',
+      'arduino': 'Arduino',
+      'vb': 'Visual Basic',
+      'fortran': 'Fortran',
+      'fortran-modern': 'Fortran',
+      'cobol': 'COBOL',
+      'pascal': 'Pascal',
+      'ada': 'Ada',
+      'abap': 'ABAP',
+      'apex': 'Apex',
+      'vala': 'Vala',
+      'd': 'D',
+      'elm': 'Elm',
+      'purescript': 'PureScript',
+      'reason': 'Reason',
+      'rescript': 'ReScript',
+      'ballerina': 'Ballerina',
+    };
+
+    // Files/types to ignore (not actual programming)
+    const ignorePatterns = [
+      'plaintext',
+      'log',
+      'ignore',
+      'git-commit',
+      'git-rebase',
+      'editorconfig',
+      'gitignore',
+      'dockerignore',
+      'npmignore',
+      'eslintignore',
+      'prettierignore',
+      'browserslistrc',
+      'nvmrc',
+      'npmrc',
+      'instructions',
+      'license',
+      'txt',
+      'csv',
+      'tsv',
+      'scminput',
+      'search-result',
+      'output',
+      'code-runner-output',
+      'interactive',
+    ];
+
+    // Special handling for certain file extensions
+    const fileExtension = filePath.split('.').pop()?.toLowerCase();
+
+    // Ignore common non-code files by extension
+    const ignoreExtensions = [
+      'log', 'txt', 'lock', 'sum', 'mod',
+      'png', 'jpg', 'jpeg', 'gif', 'svg', 'ico', 'webp',
+      'pdf', 'doc', 'docx', 'xls', 'xlsx',
+      'zip', 'tar', 'gz', 'rar', '7z',
+      'mp3', 'mp4', 'avi', 'mov', 'wav',
+    ];
+
+    // Check if it's an ignore pattern or extension
+    if (ignorePatterns.includes(languageId.toLowerCase())) {
+      return null;
+    }
+
+    if (fileExtension && ignoreExtensions.includes(fileExtension)) {
+      return null;
+    }
+
+    // Special case: terminal activities should be tracked as Shell
+    if (languageId === 'terminal') {
+      return 'Shell';
+    }
+
+    // Special case: GitHub Actions workflows
+    if (languageId === 'github-actions-workflow' || filePath.includes('.github/workflows/')) {
+      return 'YAML';
+    }
+
+    // Special case: Jupyter notebooks
+    if (languageId === 'jupyter') {
+      return 'Python';
+    }
+
+    // Special case: React Native (detect by file path or content patterns)
+    if (filePath.includes('react-native') ||
+        filePath.includes('ReactNative') ||
+        filePath.includes('/ios/') ||
+        filePath.includes('/android/') && (languageId === 'javascript' || languageId === 'typescript' || languageId === 'javascriptreact' || languageId === 'typescriptreact')) {
+      // Check if it's actually React Native by looking at common patterns
+      if (languageId === 'javascript' || languageId === 'javascriptreact') {
+        return 'React Native';
+      }
+      if (languageId === 'typescript' || languageId === 'typescriptreact') {
+        return 'React Native';
+      }
+    }
+
+    // Special case: Flutter (Dart files in Flutter projects)
+    if (languageId === 'dart') {
+      // Check if it's a Flutter project
+      if (filePath.includes('flutter') ||
+          filePath.includes('pubspec.yaml') ||
+          filePath.includes('/lib/') ||
+          filePath.includes('/test/')) {
+        return 'Flutter';
+      }
+      return 'Dart';
+    }
+
+    // Special case: Expo (React Native framework)
+    if (filePath.includes('expo') || filePath.includes('.expo')) {
+      if (languageId === 'javascript' || languageId === 'javascriptreact') {
+        return 'Expo';
+      }
+      if (languageId === 'typescript' || languageId === 'typescriptreact') {
+        return 'Expo';
+      }
+    }
+
+    // Return mapped language or capitalize original if it's a known programming language
+    const mapped = languageMap[languageId.toLowerCase()];
+    if (mapped) {
+      return mapped;
+    }
+
+    // For unknown languages, capitalize the first letter
+    // This handles new or uncommon languages gracefully
+    if (languageId.length > 0 && !ignorePatterns.includes(languageId)) {
+      return languageId.charAt(0).toUpperCase() + languageId.slice(1);
+    }
+
+    return null;
+  }
+
+  stop() {
     if (this.timer) clearInterval(this.timer);
     this.flush();
   }
