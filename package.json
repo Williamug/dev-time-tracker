@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
-  "version": "2.1.1",
+  "version": "2.1.5",
   "author": "William Asaba",
   "repository": {
     "type": "git",
@@ -94,6 +94,28 @@
       {
         "command": "devtimetracker.resetInvalidSettings",
         "title": "Reset Invalid Settings to Defaults",
+        "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.showWhatsNew",
+        "title": "What's New",
+        "category": "Dev Time Tracker",
+        "icon": "$(info)"
+      },
+      {
+        "command": "devtimetracker.openSettings",
+        "title": "Open Settings",
+        "category": "Dev Time Tracker",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "devtimetracker.testBasicCommand",
+        "title": "Test Basic Command",
+        "category": "Dev Time Tracker"
+      },
+      {
+        "command": "devtimetracker.testWhatsNew",
+        "title": "Test What's New Panel",
         "category": "Dev Time Tracker"
       }
     ],
