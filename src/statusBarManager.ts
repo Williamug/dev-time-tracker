@@ -115,6 +115,9 @@ export class StatusBarManager {
                     this.sessionStartTime = new Date(savedStartTime);
                     this.totalIdleTime = savedIdleTime;
                     this.idleTime = 0; // Current idle period resets
+
+                    // Start the update interval for the persisted session
+                    this.startUpdateInterval();
                 }
             } else {
                 // Clear old session data
@@ -284,6 +287,11 @@ export class StatusBarManager {
         // Persist the new session
         this.persistSession();
 
+        // Start the update interval
+        this.startUpdateInterval();
+    }
+
+    private startUpdateInterval(): void {
         // Clear any existing interval
         if (this.updateInterval) {
             clearInterval(this.updateInterval);
