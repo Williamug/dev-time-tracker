@@ -64,9 +64,7 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.registerCommand('devtimetracker.openSettings', () => {
       vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
     }),
-    vscode.commands.registerCommand('devtimetracker.togglePomodoro', () => {
-      statusBarManager?.togglePomodoro();
-    }),
+    // Note: togglePomodoro command is registered in StatusBarManager.getInstance()
     vscode.commands.registerCommand('devtimetracker.syncSettings', async () => {
       if (!settingsSyncService) {
         vscode.window.showWarningMessage('Settings sync service not available (backend not configured)');
@@ -378,12 +376,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
     vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
   }));
 
-
-  // Health reminder commands already registered at the top of activate()
-
-  // Sync settings command already registered early in activation
-
-  // 2c2. Reset invalid settings command
   ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.resetInvalidSettings', async () => {
     console.log('Dev Time Tracker: resetInvalidSettings command executed');
     const config = vscode.workspace.getConfiguration('devtimetracker');
@@ -471,6 +463,20 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
 export async function deactivate() {
 
+  // End all active file sessions first (this triggers checkpoints)
+  if (fileSessionTracker) {
+    fileSessionTracker.endAllSessions();
+    fileSessionTracker = null;
+  }
+
+  // Stop and flush the event buffer (wait for it to complete)
+  if (eventBuffer) {
+    eventBuffer.stop(); // This calls flush()
+    // Give it a moment to complete the flush
+    await new Promise(resolve => setTimeout(resolve, 100));
+    eventBuffer = null;
+  }
+
   // Dispose of services
   MetricsService.getInstance().dispose();
   HealthService.getInstance().dispose();
@@ -490,11 +496,5 @@ export async function deactivate() {
   if (terminalTracker) {
     terminalTracker.stop();
     terminalTracker = null;
-  }
-
-  // End all active file sessions
-  if (fileSessionTracker) {
-    fileSessionTracker.endAllSessions();
-    fileSessionTracker = null;
   }
 }
