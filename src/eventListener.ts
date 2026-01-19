@@ -24,6 +24,15 @@ export class EventListener {
     this.disposables.push(
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (event.contentChanges.length > 0) {
+          // Immediately mark activity for status bar idle detection
+          const editor = vscode.window.activeTextEditor;
+          if (editor && this.fileSessionTracker) {
+            this.fileSessionTracker.markActivity(
+              editor.document.uri.fsPath,
+              editor.document.languageId
+            );
+          }
+
           // Calculate metrics from content changes
           event.contentChanges.forEach(change => {
             // Count keystrokes (characters added)
@@ -69,6 +78,20 @@ export class EventListener {
             this.currentSessionLinesAdded = 0;
             this.currentSessionLinesRemoved = 0;
           }, this.typingDebounceMs);
+        }
+      })
+    );
+
+    // Track selection changes (cursor movement, clicks, keyboard navigation)
+    this.disposables.push(
+      vscode.window.onDidChangeTextEditorSelection((event) => {
+        const editor = event.textEditor;
+        if (editor && this.fileSessionTracker) {
+          // Mark activity immediately for responsive idle/active status
+          this.fileSessionTracker.markActivity(
+            editor.document.uri.fsPath,
+            editor.document.languageId
+          );
         }
       })
     );
