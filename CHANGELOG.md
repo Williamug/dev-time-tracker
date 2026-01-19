@@ -1,6 +1,124 @@
 # Change Log
 
-All notable changes to the "dev-time-tracker" extension will be documented in this file.
+## [2.1.5] - 2026-01-06
+
+### Added
+- **3-Tab "What's New" Interface**: Completely redesigned update notification page
+  - **OVERVIEW Tab**: Interactive feature cards with enable/disable toggles
+    - Displays all 8 features (Automatic Tracking, Activity Monitoring, Session Management, Dashboard Analytics, Health Reminders, Team Collaboration, Advanced Reports, AI Insights)
+    - Premium features marked with "PREMIUM" badges
+    - Toggle switches show current feature state (free features enabled, premium disabled)
+  - **NEWS Tab**: Categorized changelog display with professional styling
+    - Categorizes changes into: New Features, Improvements, Bug Fixes, Security Updates, Removed
+    - Color-coded badges for each category (Green=NEW, Blue=IMPROVED, Orange=FIXED, Red=SECURITY, Grey=REMOVED)
+    - Falls back to default "Thank you for updating" message with action buttons
+  - **LICENSE Tab**: Free vs Premium feature comparison
+    - Side-by-side comparison of Free and Premium features
+    - "Buy Premium" CTA button linking to devtimetracker.io/premium
+    - Clear visual distinction between feature tiers
+  - Professional design matching VS Code theme with blue accent color (#007acc)
+  - User preference toggle: "Show What's New after Update" checkbox
+  - Added webview message handlers for: toggleShowOnUpdate, tryPremium, openChangelog, openDocs
+
+### Improved
+- Enhanced user experience with modern tabbed navigation
+- Better feature discoverability through interactive cards
+- Improved changelog presentation with categorization
+- Added fallback content when changelog parsing fails
+
+### Technical Details
+- Added `Feature` interface for feature cards with isPremium flag
+- Added `SHOW_ON_UPDATE_KEY` constant for user preferences in globalState
+- Created helper methods: `renderFeatureCards()`, `renderNewsTab()`, `renderDefaultNews()`, `renderChangeCategory()`
+- Extended webview message handler with 4 new command types
+- CSS styling with hover effects, smooth transitions, and responsive layout
+- JavaScript tab switching with active state management
+
+## [2.1.4] - 2026-01-05
+
+### Fixed
+- **Time Tracking Accuracy**: Completely overhauled duration calculation
+  - **CRITICAL FIX**: Fixed severe time under-reporting issue where only active typing seconds were counted
+  - Now tracks total session time from first to last activity, not just rapid keystroke intervals
+  - Previous behavior: Only counted time between rapid keystrokes (< 10 seconds apart)
+  - New behavior: Counts entire session duration while file is active
+  - Reading code, thinking, debugging time now properly included
+  - Incremental checkpoint system ensures accurate time reporting every 5 minutes
+  - Developers will now see realistic daily coding hours instead of just minutes
+
+- **Status Bar Active/Idle Detection**: Fixed status not updating
+  - Status bar now correctly shows "Active" when typing/clicking instead of staying "Idle"
+  - Added immediate activity tracking for typing and selection changes
+  - Fixed persisted session not starting update interval on extension reload
+  - Idle/Active status now updates within 1 second of user interaction
+  - Added `markActivity()` method for instant activity timestamps
+
+- **Activity Sync to Backend**: Fixed sessions not being sent to server
+  - **CRITICAL FIX**: Checkpoints were skipped if no keystrokes detected, losing reading/thinking time
+  - Now sends checkpoints even for duration-only sessions (reading code, reviewing, debugging)
+  - Fixed extension deactivation to properly flush pending activities before closing
+  - Activities are now reliably synced every 5 minutes OR when switching/closing files
+  - Prevents loss of accumulated time during extension reloads
+
+### Technical Details
+- Modified `FileSessionTracker` to track total session duration instead of micro-intervals
+- Changed from event-to-event time accumulation to session-start-to-last-activity calculation
+- Added `lastCheckpointDuration` tracking to send only incremental time at each checkpoint
+- Added `markActivity()` for immediate activity detection without metric calculation
+- Fixed `loadPersistedSession()` to start update interval when restoring today's session
+- Fixed `checkpointSession()` to send duration even when metrics are zero (reading code)
+- Updated `deactivate()` to ensure proper checkpoint and flush sequence
+- Maintains 5-minute checkpoint interval to minimize server load while ensuring data accuracy
+- This fix resolves the common issue where developers code all day but see only 5-10 minutes tracked
+
+## [2.1.3] - 2026-01-05
+
+### Fixed
+- **Extension Initialization**: Resolved critical initialization failure
+  - Fixed duplicate command registration causing "Dev Time Tracker is not initialized yet" error
+  - StatusBarManager now initializes properly without conflicts
+  - Timer and Pomodoro functionality restored and working correctly
+  - Removed duplicate `togglePomodoro` command registration from extension activation
+
+- **What's New System**: Improved changelog detection and parsing
+  - Enhanced path resolution for CHANGELOG.md in development and production environments
+  - Added support for all workspace folders when detecting changelog
+  - Fixed changelog parsing to handle both bold and regular markdown bullet points
+  - Improved multi-line description and nested bullet point handling
+
+
+- **Language Detection**: Accurate tracking of programming languages
+  - Fixed unrealistic language tracking (removed "terminal", "ignore", "log", "instructions")
+  - Properly maps VS Code language IDs to standard language names
+  - Filters out non-programming files (config files, logs, binary files)
+  - Terminal activities now correctly tracked as "Shell" instead of generic "terminal"
+
+- **Editor Detection**: Dynamic editor identification
+  - Fixed hardcoded "VS Code" to use actual editor name
+  - Now correctly detects VS Code, Cursor, Windsurf, VSCodium, and other VS Code-based editors
+  - Backend displays accurate editor statistics for all users
+
+### Improved
+- **Changelog Integration**: Better workspace compatibility
+  - Dynamic workspace root detection for development environments
+  - Works across different workspace configurations and user setups
+  - Removed hardcoded paths for better portability
+
+- **Language Support**: Comprehensive programming language coverage
+  - Added 100+ programming languages and frameworks
+  - Mobile development: React Native, Flutter, Expo, Swift, Kotlin, Objective-C
+  - Web frameworks: Vue, Svelte, Astro, Angular, React
+  - Backend: PHP, Python, Java, Go, Rust, Ruby, Elixir, and 40+ more
+  - Database: SQL variants, GraphQL, Cypher
+  - DevOps: Docker, Terraform, Ansible, Kubernetes configs
+  - Smart framework detection (Flutter vs Dart, React Native vs JavaScript)
+  - Template languages properly mapped to parent language (Blade→PHP, ERB→Ruby)
+
+### Technical
+- **Backend Compatibility**: Verified backend properly handles editor and language data
+  - Editor statistics correctly strip version numbers and group by name
+  - Language tracking validated across all endpoints
+  - Profile and dashboard display accurate statistics
 
 ## [2.1.2] - 2025-12-20
 
