@@ -8,7 +8,8 @@ interface FileSession {
   startTime: Date;
   lastActivityTime: Date;
   lastCheckpointTime: Date;
-  accumulatedDurationSeconds: number; // Track actual active time in current checkpoint period
+  accumulatedDurationSeconds: number; // Total time from session start to last activity
+  lastCheckpointDuration: number; // Duration that was sent at last checkpoint
   metrics: {
     keystrokes: number;
     linesAdded: number;
@@ -81,6 +82,7 @@ export class FileSessionTracker {
         lastActivityTime: now,
         lastCheckpointTime: now,
         accumulatedDurationSeconds: 0,
+        lastCheckpointDuration: 0,
         metrics: {
           keystrokes: 0,
           linesAdded: 0,
@@ -90,17 +92,13 @@ export class FileSessionTracker {
         checkpointCount: 0
       };
       this.activeSessions.set(filePath, session);
-    } else {
-      // Update accumulated duration (time since last activity)
-      const timeSinceLastActivity = (now.getTime() - session.lastActivityTime.getTime()) / 1000;
-
-      // Only accumulate time if activity was recent (within 10 second idle timeout)
-      // This ensures we only count active coding time, not idle time
-      if (timeSinceLastActivity < this.idleTimeoutMs / 1000) {
-        session.accumulatedDurationSeconds += timeSinceLastActivity;
-      }
-      // If more than 10 seconds have passed, duration pauses (we don't accumulate)
     }
+
+    // Update accumulated duration - track all time from session start to now
+    // This counts the total active session time, not just rapid typing intervals
+    const timeSinceSessionStart = (now.getTime() - session.startTime.getTime()) / 1000;
+    const previousDuration = session.accumulatedDurationSeconds;
+    session.accumulatedDurationSeconds = timeSinceSessionStart;
 
     // Update metrics
     session.metrics.keystrokes += activityData.keystrokes || 0;
@@ -113,6 +111,45 @@ export class FileSessionTracker {
     const timeSinceCheckpoint = now.getTime() - session.lastCheckpointTime.getTime();
     if (timeSinceCheckpoint >= this.checkpointIntervalMs) {
       this.checkpointSession(filePath, false); // false = not final
+    }
+  }
+
+  /**
+   * Mark activity timestamp without recording metrics
+   * Used for immediate activity detection (clicks, selection changes)
+   */
+  markActivity(filePath: string, language: string) {
+    const now = new Date();
+    let session = this.activeSessions.get(filePath);
+
+    if (!session) {
+      // Create minimal session
+      session = {
+        filePath,
+        language,
+        startTime: now,
+        lastActivityTime: now,
+        lastCheckpointTime: now,
+        accumulatedDurationSeconds: 0,
+        lastCheckpointDuration: 0,
+        metrics: {
+          keystrokes: 0,
+          linesAdded: 0,
+          linesRemoved: 0,
+          clicks: 0
+        },
+        checkpointCount: 0
+      };
+      this.activeSessions.set(filePath, session);
+      console.log(`FileSessionTracker: Created new session for ${filePath} (${language})`);
+    } else {
+      // Just update the activity timestamp for idle detection
+      session.lastActivityTime = now;
+
+      // Update accumulated duration
+      const timeSinceSessionStart = (now.getTime() - session.startTime.getTime()) / 1000;
+      session.accumulatedDurationSeconds = timeSinceSessionStart;
+      console.log(`FileSessionTracker: Updated activity for ${filePath}, duration: ${timeSinceSessionStart}s`);
     }
   }
 
@@ -179,16 +216,19 @@ export class FileSessionTracker {
     const session = this.activeSessions.get(filePath);
     if (!session) return;
 
-    // Skip if no activity since last checkpoint
+    // Calculate incremental duration since last checkpoint
+    const incrementalDuration = session.accumulatedDurationSeconds - session.lastCheckpointDuration;
+    const durationSeconds = Math.max(1, Math.round(incrementalDuration));
+
+    // Skip if no activity AND no duration accumulated
+    // This prevents sending empty checkpoints but allows duration-only sessions (reading code)
     if (session.metrics.keystrokes === 0 &&
         session.metrics.linesAdded === 0 &&
         session.metrics.linesRemoved === 0 &&
-        session.metrics.clicks === 0) {
+        session.metrics.clicks === 0 &&
+        durationSeconds <= 1) {
       return;
     }
-
-    // Use accumulated duration (actual active time) instead of total session time
-    const durationSeconds = Math.max(1, Math.round(session.accumulatedDurationSeconds));
 
     // Send activity to buffer with explicit duration
     this.buffer.add('typing', {
@@ -199,13 +239,13 @@ export class FileSessionTracker {
       duration_seconds: durationSeconds
     });
 
-    // Reset metrics AND duration for next checkpoint period (but keep session alive)
+    // Reset metrics for next checkpoint period (but keep session alive)
     if (!isFinal) {
       session.metrics.keystrokes = 0;
       session.metrics.linesAdded = 0;
       session.metrics.linesRemoved = 0;
       session.metrics.clicks = 0;
-      session.accumulatedDurationSeconds = 0; // Reset duration for next checkpoint
+      session.lastCheckpointDuration = session.accumulatedDurationSeconds; // Track what we've sent
       session.lastCheckpointTime = new Date();
       session.checkpointCount++;
     }
@@ -234,15 +274,20 @@ export class FileSessionTracker {
    */
   hasRecentActivity(): boolean {
     const now = new Date().getTime();
+    const sessionCount = this.activeSessions.size;
+    console.log(`FileSessionTracker: Checking activity, ${sessionCount} active sessions`);
 
     for (const session of this.activeSessions.values()) {
       const timeSinceActivity = now - session.lastActivityTime.getTime();
+      console.log(`  Session ${session.filePath}: ${timeSinceActivity}ms since last activity (threshold: ${this.idleTimeoutMs}ms)`);
 
       if (timeSinceActivity < this.idleTimeoutMs) {
+        console.log(`  → ACTIVE (within threshold)`);
         return true;
       }
     }
 
+    console.log(`  → IDLE (no recent activity)`);
     return false;
   }
 
