@@ -124,7 +124,7 @@
       "properties": {
         "devtimetracker.apiUrl": {
           "type": "string",
-          "default": "https://devtimetrackerapp.com",
+          "default": " ",
           "order": 1,
           "description": "Base URL of your tracking API"
         },
