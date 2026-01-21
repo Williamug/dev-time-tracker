@@ -3,12 +3,10 @@ import { EventBuffer } from './buffer';
 import { EventListener } from './eventListener';
 import { StatusBarManager } from './statusBarManager';
 import { MetricsService } from './services/MetricsService';
-import { GitService } from './services/GitService';
 import { HealthService } from './services/HealthService';
 import { BackendService } from './services/BackendService';
 import { CustomReminderService } from './services/CustomReminderService';
 import { SettingsSyncService } from './services/SettingsSyncService';
-import { DiffService } from './services/DiffService';
 import { FileSessionTracker } from './services/FileSessionTracker';
 import { TerminalTracker } from './services/TerminalTracker';
 import { WhatsNewService } from './services/WhatsNewService';
@@ -16,7 +14,6 @@ import { registerCustomReminderCommands } from './commands/manageCustomReminders
 import { ICustomReminder } from './models/CustomReminder';
 
 let statusBarManager: StatusBarManager | null = null;
-let diffService: DiffService | null = null;
 let eventBuffer: EventBuffer | null = null;
 let fileSessionTracker: FileSessionTracker | null = null;
 let terminalTracker: TerminalTracker | null = null;
@@ -35,7 +32,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Initialize services with backend support
   let backendService: BackendService | null = null;
   let metricsService: MetricsService | null = null;
-  let gitService: GitService | null = null;
   let healthService: HealthService | null = null;
   let customReminderService: CustomReminderService | null = null;
 
@@ -81,29 +77,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
         }
       } catch (error) {
         vscode.window.showErrorMessage('Settings sync failed');
-      }
-    }),
-    vscode.commands.registerCommand('devtimetracker.toggleDiffCapture', async () => {
-      const cfg = vscode.workspace.getConfiguration('devtimetracker');
-      const currentValue = cfg.get<boolean>('tracking.enableDiffCapture', true);
-      const newValue = !currentValue;
-
-      await cfg.update('tracking.enableDiffCapture', newValue, vscode.ConfigurationTarget.Global);
-
-      if (newValue) {
-        if (!diffService) {
-          diffService = new DiffService();
-          diffService.start();
-          eventBuffer?.setDiffService(diffService);
-        }
-        vscode.window.showInformationMessage('Code diff tracking enabled (full diffs + line counts)');
-      } else {
-        if (diffService) {
-          diffService.dispose();
-          diffService = null;
-          eventBuffer?.setDiffService(null);
-        }
-        vscode.window.showInformationMessage('Code diff tracking disabled (line counts only)');
       }
     })
   );
@@ -192,28 +165,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
         // Only reinitialize if API connection settings changed
 
         await backendService?.initialize();
-      } else if (e.affectsConfiguration('devtimetracker.tracking.enableDiffCapture')) {
-        // Handle diff tracking toggle
-        const cfg = vscode.workspace.getConfiguration('devtimetracker');
-        const enableDiffCapture = cfg.get<boolean>('tracking.enableDiffCapture', true);
-
-        if (enableDiffCapture) {
-          // Enable diff tracking
-          if (!diffService) {
-            diffService = new DiffService();
-            diffService.start();
-            eventBuffer?.setDiffService(diffService);
-
-          }
-        } else {
-          // Disable diff tracking
-          if (diffService) {
-            diffService.dispose();
-            diffService = null;
-            eventBuffer?.setDiffService(null);
-
-          }
-        }
       } else if (e.affectsConfiguration('devtimetracker')) {
         // Push settings TO backend after a short delay (debounce)
         if (configChangeTimeout) {
@@ -243,7 +194,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
 
     // Initialize services with backend support
     metricsService = MetricsService.getInstance(backendService);
-    gitService = GitService.getInstance(backendService);
 
     // Initialize settings sync service
     settingsSyncService = SettingsSyncService.getInstance(ctx, backendService);
@@ -255,7 +205,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
     }
   } else {
     metricsService = MetricsService.getInstance(undefined);
-    gitService = GitService.getInstance(undefined);
   }
 
   // Register showStatus command BEFORE StatusBarManager (so it exists when status bar items are created)
@@ -293,18 +242,9 @@ export async function activate(ctx: vscode.ExtensionContext) {
   // Generate a session ID for this extension instance
   const sessionId = `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
-  // Initialize diff service (conditionally based on settings)
-  const enableDiffCapture = cfg.get<boolean>('tracking.enableDiffCapture', true);
-  if (enableDiffCapture) {
-    diffService = new DiffService();
-    diffService.start();
-  } else {
-
-  }
-
   // Initialize event buffer and FileSessionTracker with context for persistence
-  eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, diffService, ctx);
-  fileSessionTracker = new FileSessionTracker(eventBuffer, diffService);
+  eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, ctx);
+  fileSessionTracker = new FileSessionTracker(eventBuffer);
   fileSessionTracker.start();
 
   // Connect FileSessionTracker to StatusBarManager for instant idle detection
@@ -485,11 +425,6 @@ export async function deactivate() {
   if (settingsSyncService) {
     settingsSyncService.dispose();
     settingsSyncService = null;
-  }
-
-  if (diffService) {
-    diffService.dispose();
-    diffService = null;
   }
 
   // Stop terminal tracker
