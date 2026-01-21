@@ -4,7 +4,8 @@
   # Dev Time Tracker
 
   **Transform your coding sessions into actionable insights!**
-Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.
+
+  Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.
 
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
 ![Open VSX Downloads](https://img.shields.io/open-vsx/dt/WilliamAsaba/dev-time-tracker?style=flat&label=Open%20VSX%20Installs&logo=visual-studio-code)
@@ -12,100 +13,87 @@ Dev Time Tracker is a comprehensive productivity companion for developers that a
 
 </div>
 
+## Overview
+
+Dev Time Tracker helps developers understand how they spend their coding time - clearly, privately, and without tracking source code.
+
+Instead of monitoring what you write, Dev Time Tracker focuses on when and how long you actively code, turning everyday editor usage into meaningful, time-based insights that support better focus, healthier work habits, and informed decision-making.
+
 ## Why Dev Time Tracker?
 
-- **Automatic Time Tracking** - Zero manual input required
-- **Pomodoro Timer** - Built-in focus sessions with customizable intervals
-- **Web Dashboard** - Beautiful analytics with real-time charts and insights
-- **Code Diff Tracking** - See exactly what code you changed, Git-style
-- **Health Reminders** - Stay healthy with smart break, posture, and eye-care alerts
-- **Custom Reminders** - Create personalized reminders for your workflow
-- **Multi-Platform** - Available on VS Code Marketplace and Open VSX Registry
-- **Secure Cloud Service** - Enterprise-grade security with free and paid tiers
+Most developers don't struggle with working hard - they struggle with knowing where their time actually goes.
+
+Dev Time Tracker is built to answer questions like:
+
+- How much time am I actively coding each day?
+- When am I most focused?
+- Am I maintaining healthy work rhythms?
+- How consistent is my development time over weeks or months?
+
+All without collecting or analyzing your code.
+
+## What the Extension Tracks
+
+Dev Time Tracker collects non-invasive, aggregated activity signals, including:
+
+- ⏱ Active coding time (when the editor is in use)
+- 💤 Idle time (periods of inactivity)
+- 🗂 Session start and end times
+- 💻 Programming language context (e.g. PHP, JavaScript)
+- 🔢 Aggregated counts (edits, saves, sessions)
+
+These signals are used to generate productivity insights and time summaries.
+
+## What the Extension Does Not Track
+
+To protect your privacy and intellectual property, Dev Time Tracker never collects or transmits:
+
+- ❌ Source code or code snippets
+- ❌ File contents
+- ❌ File names or full file paths
+- ❌ Code diffs or version control data
+- ❌ Repository URLs
+- ❌ Client, company, or project identifiers
+- ❌ API keys, secrets, or environment variables
+
+**Your code always stays on your machine.**
 
 ## Key Features
 
-### Intelligent Time Tracking
-- **Smart Idle Detection**: Automatically pauses when you're away
-- **Real-time Status Bar**: See your active coding time at a glance
-- **Project-Based Tracking**: Automatically detects and tracks time per project
-- **Offline Support**: Works without internet, syncs when connected
+### Automatic Time Tracking
+Tracks active coding time in the background with no manual input required.
 
-### Pomodoro Timer
-- **Customizable Intervals**: Work (25 min), short break (5 min), long break (15 min)
-- **Auto-Start Sessions**: Optionally start next session automatically
-- **Visual Feedback**: Progress shown in status bar
-- **Smart Breaks**: Long break after 4 work sessions (configurable)
-- **Notification Sounds**: Optional audio alerts for session changes
+### Focus & Work Rhythm Awareness
+Detects idle periods and supports healthier work habits with optional reminders and session insights.
 
-### Health & Wellness
-**Your health matters!** Smart, non-intrusive reminders:
+### Productivity Insights
+View aggregated analytics that help you understand trends over time - daily, weekly, or monthly.
 
-#### Break Reminders
-- Default: Every 60 minutes
-- Snooze for 15 minutes
-- Prevents burnout and mental fatigue
-- Customizable notification style
+### Web Dashboard (Optional)
+Explore your time data through a clean, intuitive web dashboard for deeper analysis and reporting.
 
-#### Eye Strain Prevention (20-20-20 Rule)
-- Default: Every 20 minutes
-- Reminder: Look at something 20 feet away for 20 seconds
-- Reduces eye fatigue and strain
-- Protects long-term eye health
+### Privacy-First by Design
+Built with transparency and minimal data collection at its core.
 
-#### Posture Reminders
-- Default: Every 30 minutes
-- Encourages proper sitting position
-- Prevents back and neck pain
-- Improves overall ergonomics
+## Who Is It For?
 
-**All health reminders are:**
-- Non-blocking (won't interrupt your work)
-- Snooze-able (postpone when you're in the zone)
-- Customizable (adjust intervals and notification types)
-- Optional sounds (enable audio alerts if desired)
+- **Individual developers** who want clarity about their work habits
+- **Freelancers & consultants** who need confidence in their time tracking
+- **Remote developers** seeking structure without surveillance
+- **Teams** that want aggregated insights without accessing individual code
 
-### Custom Reminders
-**Create your own reminders!** Perfect for:
-- Git commit reminders ("Commit your work every 30 minutes")
-- Code review reminders
-- Documentation updates
-- Testing reminders
-- Team stand-up notifications
+## Data & Privacy
 
-**Easy Management:**
-- Visual reminder manager
-- Enable/disable individual reminders
-- Adjust intervals per reminder
+Dev Time Tracker is designed with a privacy-first philosophy:
+
+- Only time-based and aggregated data is collected
+- Backend synchronization is optional
+- Users remain in full control of their data
 
 
-### Why Teams Choose Dev Time Tracker
+## Philosophy
 
-#### Team Productivity Analytics
-- **Project Time Allocation**: See how teams distribute time across projects
-- **Peak Hours Analysis**: Optimize meeting times based on team activity
-- **Resource Planning**: Identify overworked developers or underutilized resources
-
-
-#### Project Cost & Billing
-- **Accurate Time Tracking**: Billable hours for agencies and consultancies
-- **Project Profitability**: Track actual time vs budget
-- **Client Reporting**: Transparent, automated reports for clients
-- **Resource Cost Analysis**: Calculate true developer cost per project
-
-
-#### Compliance & Privacy
-- **Activity Audit Trail**: Detailed logging for compliance requirements
-- **Privacy Controls**: Granular permissions and data access controls
-- **Automated Timesheets**: For HR and payroll integration
-- **GDPR Compliant**: Full data protection and privacy controls
-
-#### Developer Well-being
-- **Team Health Monitoring**: Ensure entire team maintains healthy work habits
-- **Burnout Prevention**: Alert managers about excessive hours
-- **Break Compliance**: Team-wide health reminder enforcement
-- **Work Pattern Analysis**: Identify unhealthy patterns (late nights, weekends)
-
+*Dev Time Tracker isn't about watching developers work - it's about helping them understand their work patterns, on their own terms.*
 
 ---
 
@@ -130,6 +118,9 @@ Download the `.vsix` file from [GitHub Releases](https://github.com/Williamug/de
 ```bash
 code --install-extension dev-time-tracker-x.x.x.vsix
 ```
+
+## License
+Dev Time Tracker is available under the [MIT License](LICENSE).
 
 
 ## Author
