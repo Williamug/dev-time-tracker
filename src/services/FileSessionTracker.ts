@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { EventBuffer } from '../buffer';
-import { DiffService } from './DiffService';
 
 interface FileSession {
   filePath: string;
@@ -32,8 +31,7 @@ export class FileSessionTracker {
   private readonly MAX_SESSIONS = 50; // Prevent memory leak
 
   constructor(
-    private buffer: EventBuffer,
-    private diffService: DiffService | null
+    private buffer: EventBuffer
   ) {
   }
 

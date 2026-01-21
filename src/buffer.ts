@@ -1,7 +1,6 @@
 import * as vscode from 'vscode';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
-import { DiffService } from './services/DiffService';
 import { StatusBarManager } from './statusBarManager';
 
 const gzip = promisify(zlib.gzip);
@@ -37,7 +36,6 @@ export class EventBuffer {
   private currentFile: string = '';
   private currentLanguage: string = '';
   private projectName: string = '';
-  private diffService: DiffService | null = null;
 
   // Circuit breaker state
   private failureCount = 0;
@@ -69,8 +67,7 @@ export class EventBuffer {
     private apiUrl: string,
     private apiToken: string,
     private sessionId: string,
-    diffService?: DiffService | null,
-    context?: vscode.ExtensionContext
+    context: vscode.ExtensionContext
   ) {
     // Remove trailing slashes from API URL
     this.apiUrl = apiUrl.replace(/\/+$/, '');
@@ -78,7 +75,6 @@ export class EventBuffer {
     // Update project name dynamically
     this.updateProjectName();
 
-    this.diffService = diffService || null;
     this.context = context;
 
     // Get StatusBarManager instance (may be null if not initialized yet)
@@ -258,16 +254,7 @@ export class EventBuffer {
 
     const filePath = editor.document.uri.fsPath;
 
-    // Get diff data if available
-    let diffData = null;
-    if (this.diffService && eventType === 'typing') {
-      try {
-        diffData = this.diffService.getDiffAndReset(filePath);
-      } catch (error) {
-
-        // Continue without diff data
-      }
-    }    // Get editor and OS information
+    // Get editor and OS information
     const editorInfo = this.getEditorInfo();
     const osInfo = this.getOperatingSystem();
 
@@ -293,12 +280,11 @@ export class EventBuffer {
       started_at: startedAt,
       ended_at: endedAt,
       keystrokes: extraData?.keystrokes ?? 0,
-      lines_added: diffData?.linesAdded ?? extraData?.lines_added ?? 0,
-      lines_removed: diffData?.linesRemoved ?? extraData?.lines_removed ?? 0,
+      lines_added: extraData?.lines_added ?? 0,
+      lines_removed: extraData?.lines_removed ?? 0,
       metadata: {
         session_id: this.sessionId,
-        characters_typed: extraData?.keystrokes ?? 0,
-        ...(diffData?.diff && { diff: diffData.diff })
+        characters_typed: extraData?.keystrokes ?? 0
       }
     };
 
@@ -457,11 +443,6 @@ export class EventBuffer {
         this.batchSize = Math.max(this.batchSize - 5, this.MIN_BATCH_SIZE);
       }
     }
-  }
-
-  setDiffService(diffService: DiffService | null) {
-    this.diffService = diffService;
-
   }
 
   /**
