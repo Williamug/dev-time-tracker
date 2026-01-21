@@ -2,7 +2,7 @@
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
   "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "author": "William Asaba",
   "repository": {
     "type": "git",
@@ -74,11 +74,6 @@
       {
         "command": "devtimetracker.manageCustomReminders",
         "title": "Manage Custom Reminders",
-        "category": "Dev Time Tracker"
-      },
-      {
-        "command": "devtimetracker.toggleDiffCapture",
-        "title": "Toggle Code Diff Tracking",
         "category": "Dev Time Tracker"
       },
       {
@@ -184,12 +179,6 @@
           "minimum": 60,
           "order": 9,
           "description": "Interval in seconds to sync metrics with the backend"
-        },
-        "devtimetracker.tracking.enableDiffCapture": {
-          "type": "boolean",
-          "default": false,
-          "order": 10,
-          "markdownDescription": "Enable capturing code diffs for each activity. **Shows what code was added/removed in the dashboard.**\n\n**Enabled**: Full diff tracking with side-by-side view\n**Disabled**: Only tracks line counts (less memory usage)"
         },
         "devtimetracker.tracking.enableTerminalTracking": {
           "type": "boolean",
@@ -404,7 +393,6 @@
     "asynckit": "^0.4.0",
     "axios": "^1.11.0",
     "combined-stream": "^1.0.8",
-    "form-data": "^4.0.1",
-    "simple-git": "^3.28.0"
+    "form-data": "^4.0.1"
   }
 }
