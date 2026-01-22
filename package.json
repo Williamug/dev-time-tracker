@@ -1,8 +1,8 @@
 {
   "name": "dev-time-tracker",
   "displayName": "Dev Time Tracker",
-  "description": "Transform your coding sessions into actionable insights! Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.",
-  "version": "2.1.6",
+  "description": "Dev Time Tracker helps developers understand how they spend their coding time — without tracking source code or sensitive project data. By recording active editor usage, identifying idle periods, and presenting clear, time-based insights through an optional web dashboard, Dev Time Tracker supports better focus, healthier work habits, and more intentional development — all with a strong emphasis on privacy and transparency.",
+  "version": "2.1.7",
   "author": "William Asaba",
   "repository": {
     "type": "git",
