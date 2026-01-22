@@ -3,9 +3,9 @@
 
   # Dev Time Tracker
 
-  **Transform your coding sessions into actionable insights!**
-
-  Dev Time Tracker is a comprehensive productivity companion for developers that automatically tracks your coding time, monitors your health, and provides powerful analytics through a beautiful web dashboard.
+> **Dev Time Tracker helps developers understand how they spend their coding time — without tracking source code or sensitive project data.**
+>
+>By recording active editor usage, identifying idle periods, and presenting clear, time-based insights through an optional web dashboard, Dev Time Tracker supports better focus, healthier work habits, and more intentional development — all with a strong emphasis on privacy and transparency.
 
 [![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
 ![Open VSX Downloads](https://img.shields.io/open-vsx/dt/WilliamAsaba/dev-time-tracker?style=flat&label=Open%20VSX%20Installs&logo=visual-studio-code)
