@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
 import { StatusBarManager } from './statusBarManager';
+import { PrivacyService } from './services/PrivacyService';
 
 const gzip = promisify(zlib.gzip);
 
@@ -36,6 +37,7 @@ export class EventBuffer {
   private currentFile: string = '';
   private currentLanguage: string = '';
   private projectName: string = '';
+  private privacyService: PrivacyService;
 
   // Circuit breaker state
   private failureCount = 0;
@@ -76,6 +78,9 @@ export class EventBuffer {
     this.updateProjectName();
 
     this.context = context;
+
+    // Initialize PrivacyService
+    this.privacyService = PrivacyService.getInstance();
 
     // Get StatusBarManager instance (may be null if not initialized yet)
     this.statusBarManager = StatusBarManager.getInstance() || undefined;
@@ -269,12 +274,16 @@ export class EventBuffer {
       return;
     }
 
+    // Sanitize sensitive data using PrivacyService
+    const sanitizedFilePath = this.privacyService.sanitizeFilePath(filePath);
+    const sanitizedProjectName = this.privacyService.sanitizeProjectName(this.projectName);
+
     const activity: CodingActivityEvent = {
       event_type: eventType,
       duration: Math.max(1, duration), // at least 1 second
-      file_path: vscode.workspace.asRelativePath(editor.document.uri),
+      file_path: sanitizedFilePath,
       language: normalizedLanguage,
-      project_name: this.projectName,
+      project_name: sanitizedProjectName,
       editor: editorInfo,
       operating_system: osInfo,
       started_at: startedAt,
@@ -460,12 +469,15 @@ export class EventBuffer {
     const editorInfo = this.getEditorInfo();
     const osInfo = this.getOperatingSystem();
 
+    // Sanitize project name for terminal activities too
+    const sanitizedProjectName = this.privacyService.sanitizeProjectName(this.projectName);
+
     const activity: CodingActivityEvent = {
       event_type: 'typing', // Backend expects 'typing' or 'click', use typing for terminal
       duration: Math.max(1, duration),
       file_path: `terminal://${extraData?.terminal_name || 'unknown'}`,
       language: 'Shell', // Normalize terminal to Shell
-      project_name: this.projectName,
+      project_name: sanitizedProjectName,
       editor: editorInfo,
       operating_system: osInfo,
       started_at: startedAt,
@@ -724,6 +736,7 @@ export class EventBuffer {
 
     // Special handling for certain file extensions
     const fileExtension = filePath.split('.').pop()?.toLowerCase();
+    const hasExtension = filePath.includes('.') && fileExtension !== filePath.toLowerCase();
 
     // Ignore common non-code files by extension
     const ignoreExtensions = [
@@ -741,6 +754,24 @@ export class EventBuffer {
 
     if (fileExtension && ignoreExtensions.includes(fileExtension)) {
       return null;
+    }
+
+    // Special case: ENV files should only be tracked if they're actually .env files
+    if (languageId === 'env' || languageId === 'dotenv') {
+      const fileName = filePath.split('/').pop()?.toLowerCase() || '';
+      // Only track if it's an actual .env file or similar config
+      if (!fileName.startsWith('.env') && fileName !== 'env' && !fileName.endsWith('.env')) {
+        return null; // Ignore files without extensions that VS Code incorrectly detects as ENV
+      }
+    }
+
+    // Ignore files without proper extensions (except special cases like Makefile, Dockerfile, etc.)
+    if (!hasExtension && languageId !== 'makefile' && languageId !== 'dockerfile') {
+      const fileName = filePath.split('/').pop()?.toLowerCase() || '';
+      const allowedNoExtension = ['makefile', 'dockerfile', 'vagrantfile', 'gemfile', 'rakefile', 'procfile'];
+      if (!allowedNoExtension.includes(fileName)) {
+        return null;
+      }
     }
 
     // Special case: terminal activities should be tracked as Shell
