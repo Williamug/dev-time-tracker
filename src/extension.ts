@@ -282,10 +282,10 @@ export async function activate(ctx: vscode.ExtensionContext) {
     console.log('Dev Time Tracker: testNotifications command executed');
     vscode.window.showInformationMessage('Testing notifications - this should appear in bottom-right corner', 'OK');
 
-    // Also test backend connection
+    // Test backend connection by fetching settings
     if (backendService) {
       try {
-        await backendService.sendEvent('test', { message: 'Test from extension' });
+        await backendService.getSettings();
         vscode.window.showInformationMessage('✓ Backend connection working!');
       } catch (error) {
         // Show safe error message
