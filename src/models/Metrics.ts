@@ -159,7 +159,7 @@ export class MetricsCollector implements IMetricsCollector {
     if (!this.isPaused) {
       this.isPaused = true;
       this.pauseStartTime = Date.now();
-      console.log('Metrics tracking paused');
+
     }
   }
 
@@ -170,7 +170,7 @@ export class MetricsCollector implements IMetricsCollector {
       this.totalPausedTime += pauseDuration;
       this.pauseStartTime = null;
       this.lastActiveTime = new Date();
-      console.log(`Metrics tracking resumed after ${pauseDuration}ms pause`);
+
     }
   }
 

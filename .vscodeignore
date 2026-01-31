@@ -1,6 +1,7 @@
 .vscode/**
 .vscode-test/**
 src/**
+out/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
@@ -9,3 +10,22 @@ vsc-extension-quickstart.md
 **/*.map
 **/*.ts
 **/.vscode-test.*
+node_modules/**
+coverage/**
+test/**
+.github/**
+.git/**
+*.vsix
+.eslintrc.json
+jest.config.js
+HEALTH-REMINDERS.md
+DEBUG-TEST.md
+TERMINAL-TRACKING.md
+*.log
+**/*.test.ts
+**/__mocks__/**
+**/mocks/**
+webpack.config.js
+
+# Important: DO NOT ignore images folder - needed for README
+# images/ should be included

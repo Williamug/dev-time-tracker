@@ -1,184 +1,136 @@
-# Dev Time Tracker
+<div align="center">
+  <img src="https://raw.githubusercontent.com/williamug/dev-time-tracker/main/images/logo.png" alt="Dev Time Tracker Logo" width="100"/>
 
-A VS Code extension that tracks your development time, provides productivity insights, and helps maintain healthy coding habits.
+  # Dev Time Tracker
 
-## Features
+> **Dev Time Tracker helps developers understand how they spend their coding time — without tracking source code or sensitive project data.**
+>
+>By recording active editor usage, identifying idle periods, and presenting clear, time-based insights through an optional web dashboard, Dev Time Tracker supports better focus, healthier work habits, and more intentional development — all with a strong emphasis on privacy and transparency.
 
-### Time Tracking
-- Automatic tracking of coding sessions
-- Real-time status bar updates
-- Daily/weekly/monthly statistics
-- Project-based time tracking
+[![Visual Studio Marketplace Version](https://img.shields.io/visual-studio-marketplace/v/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Marketplace&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
+![Open VSX Downloads](https://img.shields.io/open-vsx/dt/WilliamAsaba/dev-time-tracker?style=flat&label=Open%20VSX%20Installs&logo=visual-studio-code)
+[![Visual Studio Marketplace Installs](https://img.shields.io/visual-studio-marketplace/i/WilliamAsaba.dev-time-tracker?style=flat&label=VS%20Code%20Installs&logo=visual-studio-code)](https://marketplace.visualstudio.com/items?itemName=WilliamAsaba.dev-time-tracker)
+
+</div>
+
+## Overview
+
+Dev Time Tracker helps developers understand how they spend their coding time - clearly, privately, and without tracking source code.
+
+Instead of monitoring what you write, Dev Time Tracker focuses on when and how long you actively code, turning everyday editor usage into meaningful, time-based insights that support better focus, healthier work habits, and informed decision-making.
+
+## Why Dev Time Tracker?
+
+Most developers don't struggle with working hard - they struggle with knowing where their time actually goes.
+
+Dev Time Tracker is built to answer questions like:
+
+- How much time am I actively coding each day?
+- When am I most focused?
+- Am I maintaining healthy work rhythms?
+- How consistent is my development time over weeks or months?
+
+All without collecting or analyzing your code.
+
+## What the Extension Tracks
+
+Dev Time Tracker collects non-invasive, aggregated activity signals, including:
+
+- ⏱ Active coding time (when the editor is in use)
+- 💤 Idle time (periods of inactivity)
+- 🗂 Session start and end times
+- 💻 Programming language context (e.g. PHP, JavaScript)
+- 🔢 Aggregated counts (edits, saves, sessions)
+
+These signals are used to generate productivity insights and time summaries.
+
+## What the Extension Does Not Track
+
+To protect your privacy and intellectual property, Dev Time Tracker never collects or transmits:
+
+- ❌ Source code or code snippets
+- ❌ File contents
+- ❌ File names or full file paths
+- ❌ Code diffs or version control data
+- ❌ Repository URLs
+- ❌ Client, company, or project identifiers
+- ❌ API keys, secrets, or environment variables
+
+**Your code always stays on your machine.**
+
+## Key Features
+
+### Automatic Time Tracking
+Tracks active coding time in the background with no manual input required.
+
+### Focus & Work Rhythm Awareness
+Detects idle periods and supports healthier work habits with optional reminders and session insights.
 
 ### Productivity Insights
-- Most productive hours analysis
-- Coding streak tracking
-- Git integration for commit statistics
-- Code metrics (lines added/removed, file types)
+View aggregated analytics that help you understand trends over time - daily, weekly, or monthly.
 
-### Health & Wellness
-- Break reminders to prevent burnout
-- Eye strain prevention notifications
-- Posture reminders
-- Customizable work/break intervals
+### Web Dashboard (Optional)
+Explore your time data through a clean, intuitive web dashboard for deeper analysis and reporting.
 
-### Rich Notifications
-- Card-style notifications with animations
-- Configurable sound alerts
-- Progress bars for timed notifications
-- Multiple action buttons
-- Accessible design
+### Privacy-First by Design
+Built with transparency and minimal data collection at its core.
 
-## Requirements
+## Who Is It For?
 
-- Visual Studio Code 1.75.0 or higher
-- Git (for commit statistics)
+- **Individual developers** who want clarity about their work habits
+- **Freelancers & consultants** who need confidence in their time tracking
+- **Remote developers** seeking structure without surveillance
+- **Teams** that want aggregated insights without accessing individual code
 
-## Extension Settings
+## Data & Privacy
 
-### Time Tracking
-<!-- "devTimeTracker.apiUrl": "https://your-api-url.com", -->
-```json
-"devTimeTracker.apiToken": "your-api-token",
-"devTimeTracker.trackingInterval": 60000,
-"devTimeTracker.idleTimeout": 300000
-```
+Dev Time Tracker is designed with a privacy-first philosophy:
 
-### Notification Settings
-```json
-"devTimeTracker.notifications.enabled": true,
-"devTimeTracker.notifications.sounds": true,
-"devTimeTracker.notifications.volume": 0.5,
-"devTimeTracker.notifications.position": "top-right"
-```
-
-### Health & Wellness Configuration
-
-#### Break Reminders
-```json
-"devtimetracker.health.breakReminderEnabled": true,
-"devtimetracker.health.breakReminderInterval": 3600,  // in seconds (60 minutes)
-"devtimetracker.health.breakReminderType": "info",    // "info" | "warning" | "error" | "none"
-"devtimetracker.health.breakEnableSound": true,
-"devtimetracker.health.breakSnoozeDuration": 900,     // in seconds (15 minutes)
-"devtimetracker.health.breakSnoozeEnabled": true
-```
-
-#### Eye Strain Prevention
-```json
-"devtimetracker.health.eyeStrainEnabled": true,
-"devtimetracker.health.eyeStrainInterval": 1200,      // in seconds (20 minutes)
-"devtimetracker.health.eyeStrainNotificationType": "warning",  // "info" | "warning" | "error" | "none"
-"devtimetracker.health.eyeStrainEnableSound": true,
-"devtimetracker.health.eyeStrainSnoozeDuration": 600  // in seconds (10 minutes)
-```
-
-#### Posture Reminders
-```json
-"devtimetracker.health.postureReminderEnabled": true,
-"devtimetracker.health.postureReminderInterval": 1800,  // in seconds (30 minutes)
-"devtimetracker.health.postureNotificationType": "warning",  // "info" | "warning" | "error" | "none"
-"devtimetracker.health.postureEnableSound": true,
-"devtimetracker.health.postureSnoozeDuration": 900  // in seconds (15 minutes)
-```
-
-#### Notification Sounds
-```json
-"devtimetracker.health.breakReminderSound": true,
-"devtimetracker.health.breakReminderSoundFile": "default",
-"devtimetracker.health.breakReminderSoundVolume": 0.5,
-"devtimetracker.health.breakSnoozeSound": true,
-"devtimetracker.health.breakSnoozeSoundFile": "default",
-"devtimetracker.health.breakSnoozeSoundVolume": 0.5,
-"devtimetracker.health.eyeStrainNotificationSound": true
-```
-
-**Note:** All time intervals are specified in seconds. To convert to minutes, divide by 60 (e.g., 1200 seconds = 20 minutes).
-
-## Usage
-
-### Basic Commands
-- `Dev Time Tracker: Start/Stop Tracking` - Toggle time tracking
-- `Dev Time Tracker: Show Dashboard` - Open the analytics dashboard
-- `Dev Time Tracker: Configure` - Open extension settings
-
-### Status Bar Items
-- Activity indicator (green when active, gray when idle)
-- Current session duration
-- Today's total coding time
-- Pomodoro timer (if enabled)
-
-### Notification System
-The notification system provides rich, interactive alerts:
-
-1. **Visual Feedback**
-   - Color-coded by type (info, success, warning, error)
-   - Smooth animations for entry/exit
-   - Progress bars for time-based notifications
-
-2. **Audio Feedback**
-   - Distinct sounds for different notification types
-   - Customizable volume and enable/disable
-   - Synthesized sounds (no external files needed)
-
-3. **Interactive Elements**
-   - Primary and secondary action buttons
-   - Dismiss button
-   - Progress indicators
-
-## Known Issues
-- Audio notifications may be affected by system sound settings
-- Some metrics require Git repository initialization
-- Webview-based dashboard may have performance impact on older machines
-
-## Release Notes
-
-### 1.0.0
-Initial release with core time tracking features
-
-### 1.1.0
-- Added health and wellness reminders
-- Implemented rich notification system
-- Added status bar integration
-- Git integration for commit statistics
-
-### 1.2.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
-
-### 1.3.0
-- Added backend integration
-- Added project switching detection
-- Added health and wellness reminders
+- Only time-based and aggregated data is collected
+- Backend synchronization is optional
+- Users remain in full control of their data
 
 
-### 1.4.0
-- Added Pomodoro timer
-- Enhanced notification animations
-- Improved audio feedback
-- Added project switching detection
+## Philosophy
+
+*Dev Time Tracker isn't about watching developers work - it's about helping them understand their work patterns, on their own terms.*
 
 ---
 
-## Following extension guidelines
+## Quick Start
 
-Ensure that you've read through the extensions guidelines and follow the best practices for creating your extension.
+### Installation
 
-* [Extension Guidelines](https://code.visualstudio.com/api/references/extension-guidelines)
+#### Option 1: VS Code Marketplace
+1. Open VS Code
+2. Press `Ctrl+P` (Windows/Linux) or `Cmd+P` (Mac)
+3. Type `ext install WilliamAsaba.dev-time-tracker`
+4. Press Enter
 
-## Working with Markdown
+#### Option 2: Open VSX Registry (VSCodium, Gitpod, etc.)
+1. Open your editor
+2. Search for "Dev Time Tracker" in extensions
+3. Click Install
+4. or You can even follow the same steps in **Option 1**
 
-You can author your README using Visual Studio Code. Here are some useful editor keyboard shortcuts:
+#### Option 3: Manual Installation
+Download the `.vsix` file from [GitHub Releases](https://github.com/Williamug/dev-time-tracker/releases) and install via:
+```bash
+code --install-extension dev-time-tracker-x.x.x.vsix
+```
 
-* Split the editor (`Cmd+\` on macOS or `Ctrl+\` on Windows and Linux).
-* Toggle preview (`Shift+Cmd+V` on macOS or `Shift+Ctrl+V` on Windows and Linux).
-* Press `Ctrl+Space` (Windows, Linux, macOS) to see a list of Markdown snippets.
+## License
+Dev Time Tracker is available under the [MIT License](LICENSE).
 
-## For more information
 
-* [Visual Studio Code's Markdown Support](http://code.visualstudio.com/docs/languages/markdown)
-* [Markdown Syntax Reference](https://help.github.com/articles/markdown-basics/)
+## Author
 
-**Enjoy!**
+**William Asaba**
+
+- Email: [asabawilliam@gmail.com](mailto:asabawilliam@gmail.com)
+- GitHub: [@williamug](https://github.com/williamug)
+- LinkedIn: [william-asaba](https://www.linkedin.com/in/asaba-william-006aa1106/)
+
+---
+
+*Track smarter, code healthier, achieve more!*

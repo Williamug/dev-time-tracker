@@ -25,7 +25,8 @@ export class BackendService {
   private constructor() {
     this.config = vscode.workspace.getConfiguration('devtimetracker');
     const apiUrl = this.config.get<string>('apiUrl');
-    
+    const apiToken = this.config.get<string>('apiToken');
+
     if (!apiUrl) {
       throw new Error('API URL is not configured. Please set devtimetracker.apiUrl in your settings.');
     }
@@ -49,10 +50,13 @@ export class BackendService {
         const token = this.config.get('apiToken');
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
+        } else {
+
         }
         return config;
       },
       (error) => {
+
         return Promise.reject(error);
       }
     );
@@ -61,32 +65,41 @@ export class BackendService {
     this.client.interceptors.response.use(
       (response) => response,
       (error) => {
+        let errorMessage = 'An error occurred';
+
         if (error.response) {
           // Handle specific HTTP error statuses
           switch (error.response.status) {
             case 401:
-              vscode.window.showErrorMessage('Authentication failed. Please check your API token.');
+              errorMessage = 'Authentication failed. Please check your API token.';
               break;
             case 403:
-              vscode.window.showErrorMessage('Permission denied. You do not have access to this resource.');
+              errorMessage = 'Permission denied. You do not have access to this resource.';
               break;
             case 404:
-              vscode.window.showErrorMessage('The requested resource was not found.');
+              errorMessage = 'The requested resource was not found.';
               break;
             case 500:
-              vscode.window.showErrorMessage('An internal server error occurred. Please try again later.');
+              errorMessage = 'An internal server error occurred. Please try again later.';
               break;
             default:
-              vscode.window.showErrorMessage(`Request failed with status ${error.response.status}`);
+              errorMessage = `Request failed with status ${error.response.status}`;
           }
+
         } else if (error.request) {
           // The request was made but no response was received
-          vscode.window.showErrorMessage('No response received from the server. Please check your connection.');
+          errorMessage = 'No response received from the server. Please check your connection.';
+
         } else {
           // Something happened in setting up the request
-          vscode.window.showErrorMessage(`Error: ${error.message}`);
+          errorMessage = `Error: ${error.message}`;
+
         }
-        return Promise.reject(error);
+
+        // Add error to the error log that can be viewed via a command
+        this.logError(errorMessage);
+
+        return Promise.reject(new Error(errorMessage));
       }
     );
   }
@@ -98,12 +111,17 @@ export class BackendService {
     return BackendService.instance;
   }
 
+  private logError(message: string) {
+    // Log errors to the extension's output channel
+    const outputChannel = vscode.window.createOutputChannel('Dev Time Tracker');
+    outputChannel.appendLine(`[${new Date().toISOString()}] ${message}`);
+  }
+
   public async initialize(): Promise<boolean> {
     try {
       await this.loadSettings();
       return true;
     } catch (error) {
-      console.error('Failed to initialize BackendService:', error);
       return false;
     }
   }
@@ -118,38 +136,38 @@ export class BackendService {
         }
       }
     } catch (error) {
-      console.warn('Failed to load settings from backend:', error);
+
       throw error;
     }
   }
 
   public async getSettings(key?: string): Promise<any> {
     try {
-      const url = key ? `/api/settings/${key}` : '/api/settings';
+      const url = key ? `/api/extension-settings/${key}` : '/api/extension-settings';
       const response = await this.client.get(url);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch settings:', error);
+
       throw error;
     }
   }
 
   public async updateSetting(key: string, value: any): Promise<any> {
     try {
-      const response = await this.client.put(`/api/settings/${key}`, { value });
+      const response = await this.client.put(`/api/extension-settings/${key}`, { value });
       return response.data;
     } catch (error) {
-      console.error('Failed to update setting:', error);
+
       throw error;
     }
   }
 
   public async deleteSetting(key: string): Promise<boolean> {
     try {
-      await this.client.delete(`/api/settings/${key}`);
+      await this.client.delete(`/api/extension-settings/${key}`);
       return true;
     } catch (error) {
-      console.error('Failed to delete setting:', error);
+
       return false;
     }
   }
@@ -160,7 +178,7 @@ export class BackendService {
       const response = await this.client.get('/api/extension-settings');
       return response.data.data || [];
     } catch (error) {
-      console.error('Failed to fetch extension settings:', error);
+
       return [];
     }
   }
@@ -170,7 +188,7 @@ export class BackendService {
       const response = await this.client.get(`/api/extension-settings/${key}`);
       return response.data.data || null;
     } catch (error) {
-      console.error(`Failed to fetch extension setting ${key}:`, error);
+
       return null;
     }
   }
@@ -178,9 +196,8 @@ export class BackendService {
   public async updateExtensionSetting(key: string, value: any): Promise<ExtensionSetting | null> {
     try {
       const response = await this.client.put(`/api/extension-settings/${key}`, { value });
-      return response.data.data || null;
+      return response.data || null;
     } catch (error) {
-      console.error(`Failed to update extension setting ${key}:`, error);
       throw error;
     }
   }
@@ -190,7 +207,7 @@ export class BackendService {
       await this.client.delete(`/api/extension-settings/${key}`);
       return true;
     } catch (error) {
-      console.error(`Failed to delete extension setting ${key}:`, error);
+
       return false;
     }
   }
@@ -202,8 +219,8 @@ export class BackendService {
 
     while (attempts < maxRetries) {
       try {
-        await this.client.post('/api/events', { 
-          type: eventType, 
+        await this.client.post('/api/events', {
+          type: eventType,
           data,
           timestamp: new Date().toISOString()
         });
@@ -211,8 +228,7 @@ export class BackendService {
       } catch (error) {
         attempts++;
         lastError = error as Error;
-        console.error(`Failed to send event (attempt ${attempts}/${maxRetries}):`, error);
-        
+
         if (attempts < maxRetries) {
           // Exponential backoff: wait 1s, 2s, 4s, etc.
           const delay = Math.pow(2, attempts - 1) * 1000;
@@ -220,8 +236,7 @@ export class BackendService {
         }
       }
     }
-    
-    console.error('All retry attempts failed for event:', eventType, 'Error:', lastError);
+
     return false;
   }
 
@@ -230,10 +245,10 @@ export class BackendService {
   }
 
   public async trackMetric(metricName: string, value: number, tags: Record<string, any> = {}): Promise<boolean> {
-    return this.sendEvent('metric', { 
-      name: metricName, 
+    return this.sendEvent('metric', {
+      name: metricName,
       value,
-      ...tags 
+      ...tags
     });
   }
 
@@ -248,7 +263,7 @@ export class BackendService {
       }
       return null;
     } catch (error) {
-      console.error('Login failed:', error);
+
       throw error;
     }
   }
@@ -263,7 +278,7 @@ export class BackendService {
       }
       return false;
     } catch (error) {
-      console.error('Token refresh failed:', error);
+
       return false;
     }
   }
@@ -280,7 +295,7 @@ export class BackendService {
       }
       return false;
     } catch (error) {
-      console.error('Failed to sync settings:', error);
+
       return false;
     }
   }
@@ -290,7 +305,7 @@ export class BackendService {
       const response = await this.client.get('/api/analytics/summary');
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch analytics:', error);
+
       throw error;
     }
   }
@@ -300,8 +315,57 @@ export class BackendService {
       const response = await this.client.get(`/api/analytics/projects/${projectId}`);
       return response.data;
     } catch (error) {
-      console.error('Failed to fetch project analytics:', error);
+
       throw error;
+    }
+  }
+
+  // Custom Reminders Methods
+  public async getCustomReminders(): Promise<any> {
+    try {
+      const response = await this.client.get('/api/custom-reminders');
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async saveCustomReminders(reminders: any[]): Promise<any> {
+    try {
+      const response = await this.client.post('/api/custom-reminders', { reminders });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async syncCustomReminders(localReminders: any[], lastSync: number): Promise<any> {
+    try {
+      const response = await this.client.post('/api/custom-reminders/sync', {
+        reminders: localReminders,
+        last_sync: lastSync
+      });
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async updateCustomReminder(id: string, updates: any): Promise<any> {
+    try {
+      const response = await this.client.put(`/api/custom-reminders/${id}`, updates);
+      return response.data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  public async deleteCustomReminder(id: string): Promise<boolean> {
+    try {
+      await this.client.delete(`/api/custom-reminders/${id}`);
+      return true;
+    } catch (error) {
+      return false;
     }
   }
 }
