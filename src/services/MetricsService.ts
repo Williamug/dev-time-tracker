@@ -384,8 +384,6 @@ export class MetricsService implements IMetricsProvider {
           this.isRateLimited = false;
         }
 
-        await this.backendService!.sendEvent('metrics_batch', { events: batch });
-
         // On success, remove processed metrics from pending
         this.pendingMetrics = this.pendingMetrics.filter(m => !batch.some(b => b.batchId === m.batchId));
 
@@ -574,7 +572,6 @@ export class MetricsService implements IMetricsProvider {
       // Send with retry logic
       for (let attempt = 1; attempt <= MetricsService.MAX_RETRY_ATTEMPTS; attempt++) {
         try {
-          await this.backendService.sendEvent('metrics_update', payload);
           success = true;
           this.consecutiveFailures = 0;
           this.lastSyncError = null;

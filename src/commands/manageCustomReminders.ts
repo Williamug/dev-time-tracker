@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { CustomReminderService } from '../services/CustomReminderService';
-import { ICustomReminder } from '../models/CustomReminder';
+import { ICustomReminder, ScheduledTime } from '../models/CustomReminder';
 
 export function registerCustomReminderCommands(context: vscode.ExtensionContext) {
   try {
@@ -39,10 +39,12 @@ async function showReminderManagementUI(context: vscode.ExtensionContext) {
   // Add existing reminders
   reminders.forEach((reminder, index) => {
     const statusIcon = reminder.enabled ? '$(check)' : '$(circle-slash)';
-    const intervalText = formatSeconds(reminder.interval);
+    const scheduleText = reminder.scheduleType === 'scheduled' && reminder.scheduledTimes
+      ? formatScheduledTimes(reminder.scheduledTimes)
+      : formatSeconds(reminder.interval);
     items.push({
       label: `${statusIcon} ${reminder.title}`,
-      description: intervalText,
+      description: scheduleText,
       detail: reminder.message,
       alwaysShow: true,
       // Store index in buttons for later reference
@@ -162,40 +164,60 @@ async function addNewReminder(context: vscode.ExtensionContext) {
 
   if (!message) return;
 
-  // Step 3: Get interval
-  const intervalOptions = [
-    { label: '5 minutes', value: 300 },
-    { label: '10 minutes', value: 600 },
-    { label: '15 minutes', value: 900 },
-    { label: '30 minutes', value: 1800 },
-    { label: '1 hour', value: 3600 },
-    { label: '2 hours', value: 7200 },
-    { label: 'Custom...', value: -1 }
-  ];
-
-  const intervalChoice = await vscode.window.showQuickPick(intervalOptions, {
-    placeHolder: 'Select reminder interval'
+  // Step 3: Choose schedule type
+  const scheduleTypeChoice = await vscode.window.showQuickPick([
+    { label: '$(clock) Time-based Schedule', description: 'Show at specific times (e.g., every day at 11:00)', value: 'scheduled' },
+    { label: '$(history) Interval-based', description: 'Show every X minutes/hours', value: 'interval' }
+  ], {
+    placeHolder: 'How should this reminder be triggered?'
   });
 
-  if (!intervalChoice) return;
+  if (!scheduleTypeChoice) return;
 
-  let interval = intervalChoice.value;
+  let interval = 1800; // default 30 minutes
+  let scheduledTimes: ScheduledTime[] = [];
 
-  if (interval === -1) {
-    const customMinutes = await vscode.window.showInputBox({
-      prompt: 'Enter custom interval in minutes',
-      placeHolder: 'e.g., 45',
-      validateInput: (value) => {
-        const num = parseInt(value);
-        if (isNaN(num) || num <= 0) {
-          return 'Please enter a valid positive number';
-        }
-        return null;
-      }
+  if (scheduleTypeChoice.value === 'scheduled') {
+    // Get scheduled times
+    const times = await addScheduledTime();
+    if (!times || times.length === 0) return;
+    scheduledTimes = times;
+  } else {
+    // Step 3: Get interval
+    const intervalOptions = [
+      { label: '5 minutes', value: 300 },
+      { label: '10 minutes', value: 600 },
+      { label: '15 minutes', value: 900 },
+      { label: '30 minutes', value: 1800 },
+      { label: '1 hour', value: 3600 },
+      { label: '2 hours', value: 7200 },
+      { label: 'Custom...', value: -1 }
+    ];
+
+    const intervalChoice = await vscode.window.showQuickPick(intervalOptions, {
+      placeHolder: 'Select reminder interval'
     });
 
-    if (!customMinutes) return;
-    interval = parseInt(customMinutes) * 60;
+    if (!intervalChoice) return;
+
+    interval = intervalChoice.value;
+
+    if (interval === -1) {
+      const customMinutes = await vscode.window.showInputBox({
+        prompt: 'Enter custom interval in minutes',
+        placeHolder: 'e.g., 45',
+        validateInput: (value) => {
+          const num = parseInt(value);
+          if (isNaN(num) || num <= 0) {
+            return 'Please enter a valid positive number';
+          }
+          return null;
+        }
+      });
+
+      if (!customMinutes) return;
+      interval = parseInt(customMinutes) * 60;
+    }
   }
 
   // Create the reminder
@@ -204,6 +226,8 @@ async function addNewReminder(context: vscode.ExtensionContext) {
     title: title.trim(),
     message: message.trim(),
     interval,
+    scheduleType: scheduleTypeChoice.value as 'interval' | 'scheduled',
+    scheduledTimes: scheduledTimes.length > 0 ? scheduledTimes : undefined,
     enabled: true,
     notificationType: 'info',
     soundEnabled: false,
@@ -231,7 +255,8 @@ async function editReminder(context: vscode.ExtensionContext, index: number) {
   const options = [
     { label: '$(edit) Edit Title', action: 'title' },
     { label: '$(comment) Edit Message', action: 'message' },
-    { label: '$(clock) Change Interval', action: 'interval' },
+    { label: reminder.scheduleType === 'scheduled' ? '$(calendar) Edit Schedule' : '$(clock) Change Interval', action: 'schedule' },
+    { label: '$(refresh) Change Schedule Type', action: 'scheduleType' },
     { label: reminder.enabled ? '$(debug-pause) Disable' : '$(debug-start) Enable', action: 'toggle' },
     { label: '$(trash) Delete', action: 'delete' }
   ];
@@ -269,41 +294,78 @@ async function editReminder(context: vscode.ExtensionContext, index: number) {
       }
       break;
 
-    case 'interval':
-      const intervalOptions = [
-        { label: '5 minutes', value: 300 },
-        { label: '10 minutes', value: 600 },
-        { label: '15 minutes', value: 900 },
-        { label: '30 minutes', value: 1800 },
-        { label: '1 hour', value: 3600 },
-        { label: '2 hours', value: 7200 },
-        { label: 'Custom...', value: -1 }
-      ];
+    case 'schedule':
+      if (reminder.scheduleType === 'scheduled') {
+        // Edit scheduled times
+        const times = await addScheduledTime(reminder.scheduledTimes);
+        if (times && times.length > 0) {
+          reminder.scheduledTimes = times;
+          await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('Schedule updated');
+        }
+      } else {
+        // Edit interval
+        const intervalOptions = [
+          { label: '5 minutes', value: 300 },
+          { label: '10 minutes', value: 600 },
+          { label: '15 minutes', value: 900 },
+          { label: '30 minutes', value: 1800 },
+          { label: '1 hour', value: 3600 },
+          { label: '2 hours', value: 7200 },
+          { label: 'Custom...', value: -1 }
+        ];
 
-      const intervalChoice = await vscode.window.showQuickPick(intervalOptions, {
-        placeHolder: `Current: ${formatSeconds(reminder.interval)}`
+        const intervalChoice = await vscode.window.showQuickPick(intervalOptions, {
+          placeHolder: `Current: ${formatSeconds(reminder.interval)}`
+        });
+
+        if (intervalChoice) {
+          let interval = intervalChoice.value;
+          if (interval === -1) {
+            const customMinutes = await vscode.window.showInputBox({
+              prompt: 'Enter interval in minutes',
+              value: String(Math.floor(reminder.interval / 60)),
+              validateInput: (value) => {
+                const num = parseInt(value);
+                return isNaN(num) || num <= 0 ? 'Please enter a valid positive number' : null;
+              }
+            });
+            if (customMinutes) {
+              interval = parseInt(customMinutes) * 60;
+            } else {
+              return;
+            }
+          }
+          reminder.interval = interval;
+          await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('Interval updated');
+        }
+      }
+      break;
+
+    case 'scheduleType':
+      const typeChoice = await vscode.window.showQuickPick([
+        { label: '$(calendar) Time-based Schedule', description: 'Show at specific times', value: 'scheduled' },
+        { label: '$(history) Interval-based', description: 'Show every X minutes/hours', value: 'interval' }
+      ], {
+        placeHolder: `Current: ${reminder.scheduleType === 'scheduled' ? 'Time-based' : 'Interval-based'}`
       });
 
-      if (intervalChoice) {
-        let interval = intervalChoice.value;
-        if (interval === -1) {
-          const customMinutes = await vscode.window.showInputBox({
-            prompt: 'Enter interval in minutes',
-            value: String(Math.floor(reminder.interval / 60)),
-            validateInput: (value) => {
-              const num = parseInt(value);
-              return isNaN(num) || num <= 0 ? 'Please enter a valid positive number' : null;
-            }
-          });
-          if (customMinutes) {
-            interval = parseInt(customMinutes) * 60;
-          } else {
-            return;
+      if (typeChoice && typeChoice.value !== reminder.scheduleType) {
+        if (typeChoice.value === 'scheduled') {
+          const times = await addScheduledTime();
+          if (times && times.length > 0) {
+            reminder.scheduleType = 'scheduled';
+            reminder.scheduledTimes = times;
+            await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
+            vscode.window.showInformationMessage('Changed to time-based schedule');
           }
+        } else {
+          reminder.scheduleType = 'interval';
+          reminder.scheduledTimes = undefined;
+          await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
+          vscode.window.showInformationMessage('Changed to interval-based');
         }
-        reminder.interval = interval;
-        await config.update('customReminders', reminders, vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage('Interval updated');
       }
       break;
 
@@ -362,4 +424,120 @@ function getReminderDetails(reminder: ICustomReminder): string {
   }
 
   return parts.join(' • ');
+}
+
+async function addScheduledTime(existingTimes?: ScheduledTime[]): Promise<ScheduledTime[] | undefined> {
+  const times: ScheduledTime[] = existingTimes ? [...existingTimes] : [];
+
+  let addingMore = true;
+
+  while (addingMore) {
+    // Get time in HH:mm format
+    const timeInput = await vscode.window.showInputBox({
+      prompt: 'Enter time (24-hour format)',
+      placeHolder: 'e.g., 11:00 or 14:30',
+      validateInput: (value) => {
+        const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+        if (!timeRegex.test(value)) {
+          return 'Please enter a valid time in HH:mm format (e.g., 11:00)';
+        }
+        return null;
+      }
+    });
+
+    if (!timeInput) {
+      return times.length > 0 ? times : undefined;
+    }
+
+    // Format time to ensure HH:mm with leading zeros
+    const [hour, minute] = timeInput.split(':').map(Number);
+    const formattedTime = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+
+    // Ask for days
+    const daysChoice = await vscode.window.showQuickPick([
+      { label: 'Every day', value: 'all' },
+      { label: 'Weekdays (Mon-Fri)', value: 'weekdays' },
+      { label: 'Weekends (Sat-Sun)', value: 'weekends' },
+      { label: 'Specific days...', value: 'custom' }
+    ], {
+      placeHolder: 'When should this reminder show?'
+    });
+
+    if (!daysChoice) {
+      return times.length > 0 ? times : undefined;
+    }
+
+    let days: number[] | undefined;
+
+    if (daysChoice.value === 'weekdays') {
+      days = [1, 2, 3, 4, 5]; // Mon-Fri
+    } else if (daysChoice.value === 'weekends') {
+      days = [0, 6]; // Sun, Sat
+    } else if (daysChoice.value === 'custom') {
+      const selectedDays = await vscode.window.showQuickPick([
+        { label: 'Sunday', value: 0, picked: false },
+        { label: 'Monday', value: 1, picked: false },
+        { label: 'Tuesday', value: 2, picked: false },
+        { label: 'Wednesday', value: 3, picked: false },
+        { label: 'Thursday', value: 4, picked: false },
+        { label: 'Friday', value: 5, picked: false },
+        { label: 'Saturday', value: 6, picked: false }
+      ], {
+        placeHolder: 'Select days',
+        canPickMany: true
+      });
+
+      if (!selectedDays || selectedDays.length === 0) {
+        return times.length > 0 ? times : undefined;
+      }
+
+      days = selectedDays.map(d => d.value).sort();
+    } else {
+      days = undefined; // Every day
+    }
+
+    times.push({
+      time: formattedTime,
+      days: days
+    });
+
+    // Ask if user wants to add more times
+    const addMore = await vscode.window.showQuickPick([
+      { label: '$(add) Add another time', value: true },
+      { label: '$(check) Done', value: false }
+    ], {
+      placeHolder: `Added: ${formattedTime} ${formatDays(days)}`
+    });
+
+    if (!addMore || !addMore.value) {
+      addingMore = false;
+    }
+  }
+
+  return times.length > 0 ? times : undefined;
+}
+
+function formatScheduledTimes(times: ScheduledTime[]): string {
+  if (!times || times.length === 0) return 'No schedule set';
+
+  return times.map(t => `${t.time} ${formatDays(t.days)}`).join(', ');
+}
+
+function formatDays(days?: number[]): string {
+  if (!days || days.length === 0) return '(daily)';
+  if (days.length === 7) return '(daily)';
+
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Check for weekdays
+  if (days.length === 5 && days.every(d => [1, 2, 3, 4, 5].includes(d))) {
+    return '(weekdays)';
+  }
+
+  // Check for weekends
+  if (days.length === 2 && days.every(d => [0, 6].includes(d))) {
+    return '(weekends)';
+  }
+
+  return `(${days.map(d => dayNames[d]).join(', ')})`;
 }

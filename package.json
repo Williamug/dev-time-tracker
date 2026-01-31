@@ -180,6 +180,20 @@
           "order": 9,
           "description": "Interval in seconds to sync metrics with the backend"
         },
+        "devtimetracker.privacy.level": {
+          "type": "string",
+          "enum": [
+            "strict",
+            "partial"
+          ],
+          "default": "strict",
+          "order": 10,
+          "enumDescriptions": [
+            "Maximum privacy: Hash all file paths and project names (recommended)",
+            "Moderate privacy: Keep filenames, hash project names (less secure)"
+          ],
+          "markdownDescription": "**Privacy Protection Level**\n\n**Strict (Recommended)**: Maximum privacy protection:\n- File paths: `/client-acme/payment.php` → `file_8f4a3b2c.php`\n- Project names: `client-acme` → `project_8f4a3b2...`\n- Backend cannot reverse-engineer ANY sensitive information\n- Extension still preserves for analytics (e.g., `.php` files)\n\n**Partial**: Moderate privacy:\n- File paths: `/client-acme/payment.php` → `payment.php` ⚠️\n- Project names: `client-acme` → `project_8f4a3b2...`\n- Filenames like `payment.php`, `salary.xlsx` are still visible\n\n⚠️ **Warning**: Even filenames can reveal business domains. Use Strict mode for sensitive work.\n\n✅ **Your code content is NEVER collected, regardless of level.**"
+        },
         "devtimetracker.tracking.enableTerminalTracking": {
           "type": "boolean",
           "default": false,
