@@ -212,46 +212,6 @@ export class BackendService {
     }
   }
 
-  // Event Methods
-  public async sendEvent(eventType: string, data: any, maxRetries = 3): Promise<boolean> {
-    let attempts = 0;
-    let lastError: Error | null = null;
-
-    while (attempts < maxRetries) {
-      try {
-        await this.client.post('/api/events', {
-          type: eventType,
-          data,
-          timestamp: new Date().toISOString()
-        });
-        return true;
-      } catch (error) {
-        attempts++;
-        lastError = error as Error;
-
-        if (attempts < maxRetries) {
-          // Exponential backoff: wait 1s, 2s, 4s, etc.
-          const delay = Math.pow(2, attempts - 1) * 1000;
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-    }
-
-    return false;
-  }
-
-  public async trackActivity(activityType: string, details: any = {}): Promise<boolean> {
-    return this.sendEvent('activity', { type: activityType, ...details });
-  }
-
-  public async trackMetric(metricName: string, value: number, tags: Record<string, any> = {}): Promise<boolean> {
-    return this.sendEvent('metric', {
-      name: metricName,
-      value,
-      ...tags
-    });
-  }
-
   // Authentication Methods
   public async login(email: string, password: string): Promise<{token: string, user: any} | null> {
     try {
