@@ -24,6 +24,73 @@ interface Feature {
 export class WhatsNewService {
   private static readonly STORAGE_KEY = 'devTimeTracker.lastShownVersion';
   private static readonly SHOW_ON_UPDATE_KEY = 'devTimeTracker.showWhatsNewOnUpdate';
+
+  // Hardcoded release data - update this with each release
+  private static readonly RELEASES: ParsedRelease[] = [
+    {
+      version: '2.1.8',
+      date: '2026-02-03',
+      added: [
+        'Full changelog display in News tab - all versions shown inline',
+        'Auto-show What\'s New on updates (enabled by default, user can disable)',
+        'Cyan color theme throughout the interface'
+      ],
+      changed: [
+        'Removed toggle switches from Overview tab for cleaner interface',
+        'Updated primary color from blue to cyan (#06b6d4)',
+        'Improved What\'s New page layout and styling'
+      ],
+      fixed: [],
+      deprecated: [],
+      removed: [
+        'Feature toggle switches from Overview page',
+        '"View Full Changelog" button (changelog now inline)'
+      ],
+      security: [],
+      technical: []
+    },
+    {
+      version: '2.1.7',
+      date: '2026-01-20',
+      added: [
+        'Premium feature badges in What\'s New interface',
+        'Tabbed navigation for Overview, News, and License sections'
+      ],
+      changed: [
+        'Enhanced What\'s New page with better categorization',
+        'Improved visual design with modern styling'
+      ],
+      fixed: [
+        'Extension activation timing issues',
+        'Command registration reliability'
+      ],
+      deprecated: [],
+      removed: [],
+      security: [],
+      technical: []
+    },
+    {
+      version: '2.1.6',
+      date: '2025-12-20',
+      added: [
+        'Health reminder system with customizable intervals',
+        'Break time suggestions based on coding duration'
+      ],
+      changed: [
+        'Improved dashboard analytics performance',
+        'Enhanced session tracking accuracy'
+      ],
+      fixed: [
+        'Idle detection edge cases',
+        'Time tracking precision issues'
+      ],
+      deprecated: [],
+      removed: [],
+      security: [],
+      technical: []
+    }
+  ];
+
   private context: vscode.ExtensionContext;
   private panel?: vscode.WebviewPanel;
 
@@ -37,9 +104,12 @@ export class WhatsNewService {
   public async checkAndShowWhatsNew(): Promise<void> {
     const currentVersion = this.getCurrentVersion();
     const lastShownVersion = this.getLastShownVersion();
+    const showOnUpdate = this.context.globalState.get(WhatsNewService.SHOW_ON_UPDATE_KEY, true);
 
     if (this.isNewerVersion(currentVersion, lastShownVersion)) {
-      await this.showWhatsNew();
+      if (showOnUpdate) {
+        await this.showWhatsNew();
+      }
       await this.setLastShownVersion(currentVersion);
     }
   }
@@ -49,7 +119,7 @@ export class WhatsNewService {
    */
   public async showWhatsNew(): Promise<void> {
     const currentVersion = this.getCurrentVersion();
-    const releaseData = this.parseChangelog(currentVersion);
+    const releaseData = this.getReleaseData(currentVersion);
 
     this.panel = vscode.window.createWebviewPanel(
       'devTimeTrackerWhatsNew',
@@ -134,6 +204,14 @@ export class WhatsNewService {
     return false;
   }
 
+  private getReleaseData(version: string): ParsedRelease | null {
+    return WhatsNewService.RELEASES.find(r => r.version === version) || null;
+  }
+
+  private getAllReleases(): ParsedRelease[] {
+    return WhatsNewService.RELEASES;
+  }
+
   private parseChangelog(version: string): ParsedRelease | null {
     try {
       // Try multiple possible paths for the changelog
@@ -176,6 +254,54 @@ export class WhatsNewService {
     } catch (error) {
       console.error('Error parsing changelog:', error);
       return null;
+    }
+  }
+
+  private parseAllReleases(): ParsedRelease[] {
+    try {
+      const workspaceFolders = vscode.workspace.workspaceFolders || [];
+      const workspaceChangelogs = workspaceFolders
+        .map(folder => path.join(folder.uri.fsPath, 'CHANGELOG.md'));
+
+      const possiblePaths = [
+        path.join(this.context.extensionPath, 'CHANGELOG.md'),
+        path.join(__dirname, '..', '..', 'CHANGELOG.md'),
+        path.join(process.cwd(), 'CHANGELOG.md'),
+        ...workspaceChangelogs
+      ];
+
+      let content = '';
+
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          content = fs.readFileSync(testPath, 'utf8');
+          break;
+        }
+      }
+
+      if (!content) {
+        return [];
+      }
+
+      const releases: ParsedRelease[] = [];
+      const lines = content.split('\n');
+
+      // Find all version headers
+      for (let i = 0; i < lines.length; i++) {
+        const versionMatch = lines[i].match(/^## \[([^\]]+)\]/);
+        if (versionMatch) {
+          const version = versionMatch[1];
+          const release = this.extractVersionData(content, version);
+          if (release) {
+            releases.push(release);
+          }
+        }
+      }
+
+      return releases;
+    } catch (error) {
+      console.error('Error parsing all releases:', error);
+      return [];
     }
   }
 
@@ -389,7 +515,7 @@ export class WhatsNewService {
             left: 0;
             right: 0;
             height: 2px;
-            background: #007acc;
+            background: #06b6d4;
         }
 
         .tab-count {
@@ -432,7 +558,7 @@ export class WhatsNewService {
             background: var(--vscode-list-inactiveSelectionBackground);
             border-radius: 6px;
             padding: 20px;
-            border-left: 3px solid #007acc;
+            border-left: 3px solid #06b6d4;
             transition: all 0.2s ease;
         }
 
@@ -448,56 +574,20 @@ export class WhatsNewService {
             margin-bottom: 10px;
         }
 
-        .feature-name {
+        .feature-title {
             font-size: 16px;
             font-weight: 600;
             color: var(--vscode-foreground);
         }
 
-        .feature-toggle {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .toggle-switch {
-            width: 40px;
-            height: 20px;
-            background: var(--vscode-input-background);
-            border-radius: 10px;
-            position: relative;
-            cursor: pointer;
-            border: 1px solid var(--vscode-input-border);
-        }
-
-        .toggle-switch.enabled {
-            background: #4caf50;
-        }
-
-        .toggle-switch::after {
-            content: '';
-            width: 16px;
-            height: 16px;
-            background: white;
-            border-radius: 50%;
-            position: absolute;
-            top: 1px;
-            left: 2px;
-            transition: left 0.2s ease;
-        }
-
-        .toggle-switch.enabled::after {
-            left: 20px;
-        }
-
-        .feature-desc {
+        .feature-description {
             color: var(--vscode-descriptionForeground);
             font-size: 13px;
             line-height: 1.5;
         }
 
         .premium-badge {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #06b6d4;
             color: white;
             padding: 3px 10px;
             border-radius: 12px;
@@ -520,7 +610,7 @@ export class WhatsNewService {
         }
 
         .version-badge {
-            background: #007acc;
+            background: #06b6d4;
             color: white;
             padding: 6px 14px;
             border-radius: 4px;
@@ -548,7 +638,7 @@ export class WhatsNewService {
         }
 
         .category-badge {
-            background: #007acc;
+            background: #06b6d4;
             color: white;
             padding: 2px 8px;
             border-radius: 3px;
@@ -567,14 +657,14 @@ export class WhatsNewService {
             margin-bottom: 6px;
             background: var(--vscode-list-inactiveSelectionBackground);
             border-radius: 4px;
-            border-left: 2px solid #007acc;
+            border-left: 2px solid #06b6d4;
             font-size: 13px;
             line-height: 1.5;
         }
 
         .change-list li::before {
             content: '•';
-            color: #007acc;
+            color: #06b6d4;
             font-weight: bold;
             display: inline-block;
             width: 1em;
@@ -622,7 +712,7 @@ export class WhatsNewService {
         }
 
         .cta-button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #06b6d4;
             color: white;
             border: none;
             padding: 14px 28px;
@@ -668,7 +758,7 @@ export class WhatsNewService {
         }
 
         .footer-link {
-            color: #007acc;
+            color: #06b6d4;
             text-decoration: none;
             font-size: 13px;
         }
@@ -685,7 +775,7 @@ export class WhatsNewService {
         }
 
         .highlight {
-            color: #007acc;
+            color: #06b6d4;
             font-weight: 600;
         }
     </style>
@@ -723,12 +813,7 @@ export class WhatsNewService {
 
         <!-- NEWS TAB -->
         <div id="news-tab" class="tab-content">
-            ${releaseData ? this.renderNewsTab(releaseData) : this.renderDefaultNews()}
-
-            <div class="footer-links" style="margin-top: 30px;">
-                <a href="#" class="footer-link" onclick="openChangelog()">See all news and releases →</a>
-                <a href="#" class="footer-link" onclick="openDocs()">More details →</a>
-            </div>
+            ${this.renderFullChangelog()}
         </div>
 
         <!-- LICENSE TAB -->
@@ -927,13 +1012,6 @@ export class WhatsNewService {
           ${feature.isPremium ? '<span class="premium-badge">PREMIUM</span>' : ''}
         </div>
         <p class="feature-description">${feature.description}</p>
-        <div class="feature-toggle">
-          <label class="toggle-switch ${!feature.enabled ? 'disabled' : ''}">
-            <input type="checkbox" ${feature.enabled ? 'checked' : ''} ${feature.isPremium ? 'disabled' : ''}>
-            <span class="toggle-slider"></span>
-          </label>
-          <span class="toggle-label">${feature.enabled ? 'Enabled' : 'Disabled'}</span>
-        </div>
       </div>
     `).join('');
   }
@@ -963,35 +1041,42 @@ export class WhatsNewService {
     return newsHtml || this.renderDefaultNews();
   }
 
-  private renderDefaultNews(): string {
-    return `
-      <div class="default-news">
-        <div class="news-icon">🎉</div>
-        <h3>Thank you for updating!</h3>
-        <p>This version includes general improvements and bug fixes to enhance your experience.</p>
-        <div class="news-actions">
-          <button class="news-button" onclick="openChangelog()">
-            <span>📝</span> View Full Changelog
-          </button>
-          <button class="news-button secondary" onclick="openDocs()">
-            <span>📚</span> Read Documentation
-          </button>
-        </div>
-      </div>
-    `;
+  private renderFullChangelog(): string {
+    const releases = this.getAllReleases();
+
+    if (releases.length === 0) {
+      return this.renderDefaultNews();
+    }    const categories = [
+      { key: 'added', title: 'New Features', badge: 'NEW', color: '#06b6d4' },
+      { key: 'changed', title: 'Improvements', badge: 'IMPROVED', color: '#06b6d4' },
+      { key: 'fixed', title: 'Bug Fixes', badge: 'FIXED', color: '#f59e0b' },
+      { key: 'security', title: 'Security Updates', badge: 'SECURITY', color: '#ef4444' },
+      { key: 'removed', title: 'Removed', badge: 'REMOVED', color: '#9ca3af' }
+    ];
+
+    let html = '';
+
+    for (const release of releases) {
+      let releaseHtml = '';
+
+      for (const category of categories) {
+        const items = release[category.key as keyof ParsedRelease] as string[];
+        if (items && items.length > 0) {
+          releaseHtml += this.renderChangeCategory(category.title, category.badge, category.color, items);
+        }
+      }
+
+      if (releaseHtml) {
+        html += '<div class="version-section"><div class="version-header"><span class="version-badge">v' + release.version + '</span><span class="version-date">' + release.date + '</span></div>' + releaseHtml + '</div>';
+      }
+    }
+
+    return html || this.renderDefaultNews();
+  }  private renderDefaultNews(): string {
+    return '<div class="default-news"><div class="news-icon">🎉</div><h3>Thank you for updating!</h3><p>This version includes general improvements and bug fixes to enhance your experience.</p><div class="news-actions"><button class="news-button" onclick="openChangelog()"><span>📝</span> View Full Changelog</button><button class="news-button secondary" onclick="openDocs()"><span>📚</span> Read Documentation</button></div></div>';
   }
 
   private renderChangeCategory(title: string, badge: string, color: string, items: string[]): string {
-    return `
-      <div class="news-category">
-        <div class="category-header">
-          <span class="category-badge" style="background-color: ${color};">${badge}</span>
-          <h3 class="category-title">${title}</h3>
-        </div>
-        <ul class="category-items">
-          ${items.map(item => `<li>${item}</li>`).join('')}
-        </ul>
-      </div>
-    `;
+    return '<div class="news-category"><div class="category-header"><span class="category-badge" style="background-color: ' + color + ';">' + badge + '</span><h3 class="category-title">' + title + '</h3></div><ul class="category-items">' + items.map((item: string) => '<li>' + item + '</li>').join('') + '</ul></div>';
   }
 }
