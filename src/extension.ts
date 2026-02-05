@@ -243,6 +243,21 @@ export async function activate(ctx: vscode.ExtensionContext) {
   const sessionId = `vscode-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
   // Initialize event buffer and FileSessionTracker with context for persistence
+  // Warn user if API credentials are missing
+  if (!apiUrl || !apiToken) {
+    console.warn('[Extension] API URL or Token not configured - activity tracking will not sync to backend');
+    vscode.window.showWarningMessage(
+      'Dev Time Tracker: API credentials not configured. Activities will be tracked locally but not synced. Configure API URL and Token in settings.',
+      'Open Settings'
+    ).then(selection => {
+      if (selection === 'Open Settings') {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
+      }
+    });
+  } else {
+    console.log(`[Extension] API configured: ${apiUrl} (token: ${apiToken.substring(0, 10)}...)`);
+  }
+
   eventBuffer = new EventBuffer(apiUrl || '', apiToken || '', sessionId, ctx);
   fileSessionTracker = new FileSessionTracker(eventBuffer);
   fileSessionTracker.start();
@@ -309,11 +324,6 @@ export async function activate(ctx: vscode.ExtensionContext) {
     } else {
       vscode.window.showWarningMessage('Dashboard URL not configured. Please set up your API URL in settings.');
     }
-  }));
-
-  ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.openSettings', () => {
-    console.log('Dev Time Tracker: openSettings command executed');
-    vscode.commands.executeCommand('workbench.action.openSettings', 'devtimetracker');
   }));
 
   ctx.subscriptions.push(vscode.commands.registerCommand('devtimetracker.resetInvalidSettings', async () => {
