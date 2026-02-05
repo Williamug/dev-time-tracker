@@ -153,14 +153,14 @@ export class WhatsNewService {
             await this.context.globalState.update(WhatsNewService.SHOW_ON_UPDATE_KEY, message.value);
             break;
           case 'tryPremium':
-            vscode.env.openExternal(vscode.Uri.parse('https://devtimetracker.io/premium'));
+            vscode.env.openExternal(vscode.Uri.parse(''));
             break;
           case 'openChangelog':
             const changelogPath = vscode.Uri.file(this.context.extensionPath + '/CHANGELOG.md');
             vscode.commands.executeCommand('markdown.showPreview', changelogPath);
             break;
           case 'openDocs':
-            vscode.env.openExternal(vscode.Uri.parse('https://devtimetracker.io/docs'));
+            vscode.env.openExternal(vscode.Uri.parse(''));
             break;
           case 'close':
             this.panel?.dispose();
